@@ -3,9 +3,9 @@ services:
     image: postgres:16-alpine
     container_name: gategram_postgres
     environment:
-      POSTGRES_USER: gategram
-      POSTGRES_PASSWORD: gategram
-      POSTGRES_DB: gategram
+      POSTGRES_USER: ${POSTGRES_USER:-gategram}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gategram}
+      POSTGRES_DB: ${POSTGRES_DB:-gategram}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -35,10 +35,10 @@ services:
       dockerfile: Dockerfile
     container_name: gategram_backend
     environment:
-      - DATABASE_URL=postgresql://gategram:gategram@postgres:5432/gategram
-      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=${DATABASE_URL:-postgresql://gategram:gategram@postgres:5432/gategram}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - SECRET_KEY=${SECRET_KEY:-your-secret-key-change-in-production-min-32-chars}
-      - CORS_ORIGINS=http://localhost:3000
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
     volumes:
       - ./backend:/app
     ports:
@@ -56,8 +56,8 @@ services:
       dockerfile: Dockerfile
     container_name: gategram_frontend
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000/api
-      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
+      - NODE_ENV=${NODE_ENV:-development}
     volumes:
       - ./frontend:/app
       - /app/node_modules
@@ -74,8 +74,8 @@ services:
       dockerfile: Dockerfile
     container_name: gategram_celery
     environment:
-      - DATABASE_URL=postgresql://gategram:gategram@postgres:5432/gategram
-      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=${DATABASE_URL:-postgresql://gategram:gategram@postgres:5432/gategram}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
     volumes:
       - ./backend:/app
     depends_on:
@@ -91,8 +91,8 @@ services:
       dockerfile: Dockerfile
     container_name: gategram_celery_beat
     environment:
-      - DATABASE_URL=postgresql://gategram:gategram@postgres:5432/gategram
-      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=${DATABASE_URL:-postgresql://gategram:gategram@postgres:5432/gategram}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
     volumes:
       - ./backend:/app
     depends_on:

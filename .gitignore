@@ -47,3 +47,7 @@ Thumbs.db
 # Media files
 media/
 
+# Celery
+celerybeat-schedule
+celerybeat-schedule.db
+celerybeat.pid
