@@ -9,6 +9,10 @@ class Settings(BaseSettings):
     
     # Database
     DATABASE_URL: str = "postgresql://gategram:gategram@postgres:5432/gategram"
+    # Переменные для docker-compose (могут быть не использованы в коде, но должны быть в Settings)
+    POSTGRES_USER: str | None = None
+    POSTGRES_PASSWORD: str | None = None
+    POSTGRES_DB: str | None = None
     
     # Redis
     REDIS_URL: str = "redis://redis:6379/0"
@@ -38,6 +42,8 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = True
+        # Разрешаем дополнительные поля из .env (для переменных docker-compose)
+        extra = "ignore"
 
 
 settings = Settings()
