@@ -19,25 +19,21 @@ export default function LoginPage() {
     register: registerField,
     handleSubmit,
     formState: { errors },
+    reset,
   } = useForm<FormData>()
 
-  const onSubmit = async (data: FormData) => {
+  const onSubmit = async (data: FormData, e?: React.BaseSyntheticEvent) => {
+    e?.preventDefault() // Явно предотвращаем стандартное поведение формы
     setError(null)
-    console.log('Form submitted:', { isRegister, email: data.email })
     try {
       if (isRegister) {
-        console.log('Registering user...')
         await register({ email: data.email, password: data.password })
-        console.log('Registration successful')
         // Редирект происходит в useAuth после успешного логина
       } else {
-        console.log('Logging in...')
         await login({ email: data.email, password: data.password })
-        console.log('Login successful')
         // Редирект происходит в useAuth
       }
     } catch (err: any) {
-      console.error('Auth error:', err)
       setError(err?.message || (isRegister ? 'Ошибка при регистрации' : 'Неверный email или пароль'))
     }
   }
@@ -52,7 +48,13 @@ export default function LoginPage() {
             {isRegister ? 'Регистрация' : 'Вход в GateGram'}
           </h2>
         </div>
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit(onSubmit)}>
+        <form 
+          className="mt-8 space-y-6" 
+          onSubmit={(e) => {
+            e.preventDefault() // Предотвращаем стандартную отправку формы
+            handleSubmit(onSubmit)(e) // Вызываем обработчик react-hook-form
+          }}
+        >
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
               {error}
@@ -139,9 +141,11 @@ export default function LoginPage() {
           <div className="text-center">
             <button
               type="button"
-              onClick={() => {
+              onClick={(e) => {
+                e.preventDefault() // Предотвращаем любое стандартное поведение
                 setError(null)
                 setIsRegister(!isRegister)
+                reset() // Очищаем форму при переключении
               }}
               className="text-sm text-indigo-600 hover:text-indigo-500"
             >

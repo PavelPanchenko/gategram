@@ -28,8 +28,7 @@ export function useAuth() {
       }
     },
     onError: (error: Error) => {
-      // Ошибка логируется, но пробрасывается через Promise.reject в функции login
-      console.error('Login error:', error)
+      // Ошибка обрабатывается в компоненте
     },
   })
 
@@ -37,8 +36,7 @@ export function useAuth() {
     mutationFn: ({ email, password }: { email: string; password: string }) =>
       api.register(email, password),
     onError: (error: Error) => {
-      // Ошибка логируется, но пробрасывается через Promise.reject в функции register
-      console.error('Register error:', error)
+      // Ошибка обрабатывается в компоненте
     },
   })
 

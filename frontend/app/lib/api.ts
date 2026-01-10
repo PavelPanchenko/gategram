@@ -2,11 +2,8 @@
 // NEXT_PUBLIC_* переменные доступны и на клиенте, и на сервере в Next.js
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'
 
-// Логирование для отладки (только в dev режиме)
-if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
-  console.log('API_URL:', API_URL)
-  console.log('NEXT_PUBLIC_API_URL from env:', process.env.NEXT_PUBLIC_API_URL)
-}
+// API URL конфигурация
+// В случае проблем с подключением проверьте NEXT_PUBLIC_API_URL в frontend/.env.local
 
 // Проверка истечения токена
 function isTokenExpired(token: string): boolean {
@@ -262,30 +259,12 @@ class ApiClient {
     }
 
     const url = `${this.baseUrl}${endpoint}`
-    
-    // Логирование для отладки
-    if (process.env.NODE_ENV === 'development') {
-      console.log('API Request:', {
-        method: options.method || 'GET',
-        url,
-        headers: { ...headers, Authorization: token ? 'Bearer ***' : undefined },
-      })
-    }
 
     const response = await fetch(url, {
       ...options,
       headers,
       credentials: 'include',
     })
-    
-    // Логирование ответа
-    if (process.env.NODE_ENV === 'development') {
-      console.log('API Response:', {
-        status: response.status,
-        statusText: response.statusText,
-        url: response.url,
-      })
-    }
 
     if (!response.ok) {
       // Если 401, пытаемся обновить токен и повторить запрос
@@ -402,12 +381,6 @@ class ApiClient {
 
   // Auth
   async register(email: string, password: string): Promise<User> {
-    if (process.env.NODE_ENV === 'development') {
-      console.log('Register Request:', {
-        endpoint: '/auth/register',
-        baseUrl: this.baseUrl,
-      })
-    }
     return this.request<User>('/auth/register', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
@@ -415,43 +388,20 @@ class ApiClient {
   }
 
   async login(email: string, password: string): Promise<TokenResponse> {
-    const formData = new URLSearchParams()
-    formData.append('username', email)
-    formData.append('password', password)
-
     const url = `${this.baseUrl}/auth/login`
-    
-    // Логирование для отладки
-    if (process.env.NODE_ENV === 'development') {
-      console.log('Login Request:', {
-        method: 'POST',
-        url,
-        baseUrl: this.baseUrl,
-      })
-    }
 
     const response = await fetch(url, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Type': 'application/json',
       },
-      body: formData,
+      body: JSON.stringify({ email, password }),
       credentials: 'include',
     })
 
-    // Логирование ответа
-    if (process.env.NODE_ENV === 'development') {
-      console.log('Login Response:', {
-        status: response.status,
-        statusText: response.statusText,
-        ok: response.ok,
-      })
-    }
-
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: 'Invalid credentials' }))
-      console.error('Login error response:', error)
-      throw new Error(error.detail || 'Invalid credentials')
+      const error = await response.json().catch(() => ({ detail: 'Неверный email или пароль' }))
+      throw new Error(error.detail || 'Неверный email или пароль')
     }
 
     const data = await response.json()

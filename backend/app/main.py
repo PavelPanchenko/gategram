@@ -235,19 +235,19 @@ app.add_middleware(
     expose_headers=["*"],
 )
 
-# Подключаем роутеры
-app.include_router(auth.router)
-app.include_router(bots.router)
-app.include_router(broadcasts.router)
-app.include_router(analytics.router)
-app.include_router(message_templates.router)
-app.include_router(user_tags.router)
-app.include_router(triggers.router)
-app.include_router(global_templates.router)
-app.include_router(global_tags.router)
-app.include_router(global_triggers.router)
-app.include_router(global_users.router)
-app.include_router(health.router)
+# Подключаем роутеры с префиксом /api
+app.include_router(auth.router, prefix="/api")
+app.include_router(bots.router, prefix="/api")
+app.include_router(broadcasts.router, prefix="/api")
+app.include_router(analytics.router, prefix="/api")
+app.include_router(message_templates.router, prefix="/api")
+app.include_router(user_tags.router, prefix="/api")
+app.include_router(triggers.router, prefix="/api")
+app.include_router(global_templates.router, prefix="/api")
+app.include_router(global_tags.router, prefix="/api")
+app.include_router(global_triggers.router, prefix="/api")
+app.include_router(global_users.router, prefix="/api")
+app.include_router(health.router)  # health без префикса для мониторинга
 
 
 @app.get("/")

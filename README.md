@@ -312,11 +312,6 @@ NEXT_PUBLIC_API_URL=http://localhost:8000/api
 # NEXT_PUBLIC_API_URL=http://your-domain.com:8000/api
 ```
 
-**Для Docker Compose**: Создайте симлинк для удобства:
-```bash
-ln -s backend/.env .env
-```
-Это позволит Docker Compose читать переменные для подстановки `${VARIABLE}`.
 
 4. **Запустите все сервисы:**
 
