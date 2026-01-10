@@ -5,8 +5,8 @@ WORKDIR /app
 # Copy package files
 COPY package.json package-lock.json* ./
 
-# Install dependencies
-RUN npm install
+# Install dependencies (исправляем проблему с lockfile)
+RUN npm ci || npm install
 
 # Build arguments для переменных окружения
 ARG NEXT_PUBLIC_API_URL
