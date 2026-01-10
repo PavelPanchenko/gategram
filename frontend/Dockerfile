@@ -8,14 +8,22 @@ COPY package.json package-lock.json* ./
 # Install dependencies
 RUN npm install
 
+# Build arguments для переменных окружения
+ARG NEXT_PUBLIC_API_URL
+ARG NODE_ENV
+
 # Copy application code
 COPY . .
 
-# Build arguments for Next.js public env vars
-ARG NEXT_PUBLIC_API_URL
-ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+# Создадим .env.local из build args (если файла нет)
+# Next.js автоматически читает .env.local
+RUN if [ ! -f .env.local ]; then \
+    echo "NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}" > .env.local && \
+    echo "NODE_ENV=${NODE_ENV:-development}" >> .env.local; \
+    fi
 
-ARG NODE_ENV
+# Также установим как ENV для runtime
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 ENV NODE_ENV=${NODE_ENV}
 
 # Expose port
