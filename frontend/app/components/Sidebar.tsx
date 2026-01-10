@@ -26,7 +26,7 @@ export default function Sidebar() {
   ]
 
   return (
-    <div className="w-64 bg-white border-r border-gray-200 h-screen fixed left-0 top-0 flex flex-col">
+    <div className="hidden sm:flex w-64 bg-white border-r border-gray-200 h-screen fixed left-0 top-0 flex-col z-10">
       <div className="p-6 border-b border-gray-200">
         <h1 className="text-xl font-semibold text-gray-900">GateGram</h1>
         <p className="text-gray-500 text-xs mt-1">Telegram Gateway</p>

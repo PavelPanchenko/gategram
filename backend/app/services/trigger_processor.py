@@ -126,17 +126,35 @@ async def _execute_action(
     db: Session,
     data: dict
 ):
-    """Выполнить действие триггера"""
-    action_data = trigger.action_data or {}
-    
-    if trigger.action_type == TriggerAction.SEND_MESSAGE.value:
-        await _send_message_action(trigger, bot_id, telegram_user_id, db, action_data, data)
-    
-    elif trigger.action_type == TriggerAction.ADD_TAG.value:
-        await _add_tag_action(trigger, bot_id, telegram_user_id, db, action_data)
-    
-    elif trigger.action_type == TriggerAction.REMOVE_TAG.value:
-        await _remove_tag_action(trigger, bot_id, telegram_user_id, db, action_data)
+    """Выполнить действие триггера (поддерживает множественные действия)"""
+    # Проверяем новое поле actions (правильный формат)
+    if trigger.actions and isinstance(trigger.actions, list) and len(trigger.actions) > 0:
+        # Новый формат: массив действий в поле actions
+        logger.info(f"Executing {len(trigger.actions)} actions for trigger {trigger.id}")
+        for idx, action in enumerate(trigger.actions):
+            action_type = action.get("type")
+            action_params = action.get("data", {})
+            logger.info(f"Executing action {idx + 1}/{len(trigger.actions)}: type={action_type}")
+            
+            if action_type == TriggerAction.SEND_MESSAGE.value:
+                await _send_message_action(trigger, bot_id, telegram_user_id, db, action_params, data)
+            elif action_type == TriggerAction.ADD_TAG.value:
+                await _add_tag_action(trigger, bot_id, telegram_user_id, db, action_params)
+            elif action_type == TriggerAction.REMOVE_TAG.value:
+                await _remove_tag_action(trigger, bot_id, telegram_user_id, db, action_params)
+    else:
+        # Старый формат: одно действие в action_type/action_data (для обратной совместимости)
+        logger.info(f"Using legacy format for trigger {trigger.id}: action_type={trigger.action_type}")
+        action_data = trigger.action_data or {}
+        
+        if trigger.action_type == TriggerAction.SEND_MESSAGE.value:
+            await _send_message_action(trigger, bot_id, telegram_user_id, db, action_data, data)
+        
+        elif trigger.action_type == TriggerAction.ADD_TAG.value:
+            await _add_tag_action(trigger, bot_id, telegram_user_id, db, action_data)
+        
+        elif trigger.action_type == TriggerAction.REMOVE_TAG.value:
+            await _remove_tag_action(trigger, bot_id, telegram_user_id, db, action_data)
 
 
 async def _send_message_action(
@@ -163,8 +181,7 @@ async def _send_message_action(
     if "template_id" in action_data:
         template = db.query(MessageTemplate).filter(
             MessageTemplate.id == action_data["template_id"],
-            MessageTemplate.bot_id == bot_id,
-            MessageTemplate.is_active == True
+            MessageTemplate.bot_id == bot_id
         ).first()
         
         if template:

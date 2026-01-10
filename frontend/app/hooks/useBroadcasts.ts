@@ -6,6 +6,16 @@ export function useBroadcasts(botId?: number, status?: string) {
   return useQuery({
     queryKey: ['broadcasts', botId, status],
     queryFn: () => api.getBroadcasts(botId, status),
+    refetchInterval: (query) => {
+      // Автоматически обновляем каждые 2 секунды, если есть рассылки в процессе или запланированные
+      const broadcasts = query.state.data as Broadcast[] | undefined
+      const hasActiveOrScheduled = broadcasts?.some(
+        (b) => b.status === 'sending' || b.status === 'scheduled' || b.status === 'pending'
+      )
+      return hasActiveOrScheduled ? 2000 : false
+    },
+    refetchOnWindowFocus: true, // Обновлять при возврате на вкладку
+    staleTime: 1000, // Данные считаются устаревшими через 1 секунду
   })
 }
 
@@ -42,7 +52,20 @@ export function useCancelBroadcast() {
 
   return useMutation({
     mutationFn: (broadcastId: number) => api.cancelBroadcast(broadcastId),
-    onSuccess: () => {
+    onSuccess: (_, broadcastId) => {
+      // Оптимистичное обновление: обновляем статус рассылки в кэше
+      queryClient.setQueriesData<Broadcast[]>(
+        { queryKey: ['broadcasts'] },
+        (old) => {
+          if (!old) return old
+          return old.map((broadcast) =>
+            broadcast.id === broadcastId
+              ? { ...broadcast, status: 'cancelled' }
+              : broadcast
+          )
+        }
+      )
+      // Инвалидируем для полного обновления
       queryClient.invalidateQueries({ queryKey: ['broadcasts'] })
     },
   })

@@ -349,7 +349,26 @@ async def get_bot_users(
         query = query.filter(TelegramUser.source == source_filter)
     
     users = query.order_by(TelegramUser.joined_at.desc()).offset(skip).limit(limit).all()
-    return users
+    
+    # Преобразуем в ответы с тегами
+    result = []
+    for user in users:
+        user_response = TelegramUserResponse(
+            id=user.id,
+            bot_id=user.bot_id,
+            telegram_user_id=user.telegram_user_id,
+            username=user.username,
+            first_name=user.first_name,
+            last_name=user.last_name,
+            source=user.source,
+            status=user.status,
+            joined_at=user.joined_at,
+            last_activity=user.last_activity,
+            tags=[{"id": tag.id, "name": tag.name, "color": tag.color} for tag in user.tags]
+        )
+        result.append(user_response)
+    
+    return result
 
 
 @router.post("/{bot_id}/users/{user_id}/block", response_model=TelegramUserResponse, status_code=status.HTTP_200_OK)

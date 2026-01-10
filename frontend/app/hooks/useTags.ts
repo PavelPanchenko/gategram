@@ -16,54 +16,52 @@ export function useAllTags(botId?: number) {
   })
 }
 
-export function useCreateTag(botId: number) {
+export function useCreateTag() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (data: Partial<UserTag>) => api.createTag(botId, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tags', botId] })
-      // Инвалидируем все запросы all-tags (с фильтром и без)
+    mutationFn: ({ botId, data }: { botId: number; data: Partial<UserTag> }) => 
+      api.createTag(botId, data),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['tags', variables.botId] })
       queryClient.invalidateQueries({ queryKey: ['all-tags'] })
-      queryClient.invalidateQueries({ queryKey: ['all-tags', botId] })
     },
   })
 }
 
-export function useUpdateTag(botId: number) {
+export function useUpdateTag() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ tagId, data }: { tagId: number; data: Partial<UserTag> }) =>
+    mutationFn: ({ botId, tagId, data }: { botId: number; tagId: number; data: Partial<UserTag> }) =>
       api.updateTag(botId, tagId, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tags', botId] })
-      // Инвалидируем все запросы all-tags (с фильтром и без)
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['tags', variables.botId] })
       queryClient.invalidateQueries({ queryKey: ['all-tags'] })
-      queryClient.invalidateQueries({ queryKey: ['all-tags', botId] })
     },
   })
 }
 
-export function useDeleteTag(botId: number) {
+export function useDeleteTag() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (tagId: number) => api.deleteTag(botId, tagId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tags', botId] })
-      // Инвалидируем все запросы all-tags (с фильтром и без)
+    mutationFn: ({ botId, tagId }: { botId: number; tagId: number }) => 
+      api.deleteTag(botId, tagId),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['tags', variables.botId] })
       queryClient.invalidateQueries({ queryKey: ['all-tags'] })
-      queryClient.invalidateQueries({ queryKey: ['all-tags', botId] })
-      queryClient.invalidateQueries({ queryKey: ['bot-users', botId] })
+      queryClient.invalidateQueries({ queryKey: ['bots', variables.botId, 'users'] })
+      queryClient.invalidateQueries({ queryKey: ['users', 'all'] })
     },
   })
 }
 
-export function useAssignTagsToUser(botId: number) {
+export function useAssignTagsToUser() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ userId, tagIds }: { userId: number; tagIds: number[] }) =>
+    mutationFn: ({ botId, userId, tagIds }: { botId: number; userId: number; tagIds: number[] }) =>
       api.assignTagsToUser(botId, userId, tagIds),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['bot-users', botId] })
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['bots', variables.botId, 'users'] })
+      queryClient.invalidateQueries({ queryKey: ['users', 'all'] })
     },
   })
 }

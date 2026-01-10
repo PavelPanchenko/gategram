@@ -19,7 +19,11 @@ celery_app.conf.update(
     beat_schedule={
         'check-inactive-users': {
             'task': 'app.tasks.trigger_tasks.check_inactive_users_task',
-            'schedule': 3600.0,  # Каждый час
+            'schedule': crontab(hour=10, minute=0),  # Каждый день в 10:00 UTC
+        },
+        'check-scheduled-broadcasts': {
+            'task': 'check_scheduled_broadcasts',
+            'schedule': 60.0,  # Каждую минуту проверяем запланированные рассылки
         },
         'cleanup-old-media-files': {
             'task': 'cleanup_old_media_files',

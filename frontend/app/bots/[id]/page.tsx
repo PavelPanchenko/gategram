@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm, useFieldArray, useFormContext, FormProvider } from 'react-hook-form'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
@@ -9,7 +9,9 @@ import { Channel } from '@/app/lib/api'
 import { useBot, useUpdateBot } from '@/app/hooks/useBots'
 import { useChannelInfo } from '@/app/hooks/useChannelInfo'
 import { useTemplates } from '@/app/hooks/useTemplates'
-import { Settings, FileText, Tag, Zap, X, CheckCircle, Users } from 'lucide-react'
+import { useBotUsers } from '@/app/hooks/useUsers'
+import { Settings, FileText, Tag, Zap, X, CheckCircle, Users, Link2, Copy, Plus } from 'lucide-react'
+import { showToast } from '@/app/utils/toast'
 
 type FormData = {
   name: string
@@ -88,6 +90,7 @@ export default function EditBotPage() {
   
   const { data: bot, isLoading: loadingBot, error: loadError } = useBot(botId)
   const { data: templates } = useTemplates(botId)
+  const { data: users } = useBotUsers(botId)
   const updateBot = useUpdateBot()
   
   // Проверяем, есть ли активный шаблон с "welcome" в названии
@@ -174,6 +177,52 @@ export default function EditBotPage() {
     )
   }
 
+  const [referralLinks, setReferralLinks] = useState<Array<{ source: string; link: string }>>([])
+  const [newSource, setNewSource] = useState('')
+
+  const generateReferralLink = () => {
+    if (!newSource.trim()) {
+      showToast.error('Введите название источника')
+      return
+    }
+    
+    if (referralLinks.some(link => link.source === newSource.trim())) {
+      showToast.error('Ссылка с таким источником уже существует')
+      return
+    }
+
+    const botUsername = bot?.username
+    if (!botUsername) {
+      showToast.error('У бота нет username')
+      return
+    }
+
+    const link = `https://t.me/${botUsername}?start=${encodeURIComponent(newSource.trim())}`
+    setReferralLinks([...referralLinks, { source: newSource.trim(), link }])
+    setNewSource('')
+    showToast.success('Ссылка создана')
+  }
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text)
+    showToast.success('Ссылка скопирована')
+  }
+
+  const removeReferralLink = (source: string) => {
+    setReferralLinks(referralLinks.filter(link => link.source !== source))
+  }
+
+  // Вычисляем статистику по источникам
+  const sourceStats = users?.reduce((acc, user) => {
+    const source = user.source || 'Без источника'
+    acc[source] = (acc[source] || 0) + 1
+    return acc
+  }, {} as Record<string, number>) || {}
+
+  const sortedSources = Object.entries(sourceStats)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10) // Топ 10 источников
+
   return (
     <DashboardLayout>
       <div className="max-w-6xl">
@@ -182,37 +231,124 @@ export default function EditBotPage() {
             Управление ботом
           </h1>
           
-          {/* Быстрые ссылки */}
-          <div className="flex gap-3 mb-6">
-            <Link
-              href="/templates"
-              className="px-4 py-2 bg-white border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-sm transition-all text-sm font-medium text-gray-700 flex items-center gap-2"
-            >
-              <FileText size={16} />
-              <span>Шаблоны</span>
-            </Link>
-            <Link
-              href="/tags"
-              className="px-4 py-2 bg-white border border-gray-200 rounded-lg hover:border-green-300 hover:shadow-sm transition-all text-sm font-medium text-gray-700 flex items-center gap-2"
-            >
-              <Tag size={16} />
-              <span>Теги</span>
-            </Link>
-            <Link
-              href="/triggers"
-              className="px-4 py-2 bg-white border border-gray-200 rounded-lg hover:border-purple-300 hover:shadow-sm transition-all text-sm font-medium text-gray-700 flex items-center gap-2"
-            >
-              <Zap size={16} />
-              <span>Триггеры</span>
-            </Link>
-            <Link
-              href={`/bots/${botId}/users`}
-              className="px-4 py-2 bg-white border border-gray-200 rounded-lg hover:border-indigo-300 hover:shadow-sm transition-all text-sm font-medium text-gray-700 flex items-center gap-2"
-            >
-              <Users size={16} />
-              <span>Пользователи</span>
-            </Link>
+        </div>
+
+        {/* Генератор реферальных ссылок */}
+        <div className="bg-white rounded-2xl shadow-lg p-8 border border-gray-100 mb-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Link2 className="text-indigo-600" size={24} />
+            <h2 className="text-2xl font-bold text-gray-900">Реферальные ссылки</h2>
           </div>
+          <p className="text-gray-600 mb-4">
+            Создавайте уникальные ссылки для отслеживания источников трафика. Параметр будет сохранен в поле "source" пользователя.
+          </p>
+
+          {/* Базовая ссылка на бота */}
+          {bot?.username && (
+            <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="text-sm font-medium text-blue-900 mb-2">Базовая ссылка на бота:</div>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 text-sm text-blue-800 font-mono break-all">
+                  https://t.me/{bot.username}
+                </code>
+                <button
+                  onClick={() => copyToClipboard(`https://t.me/${bot.username}`)}
+                  className="px-3 py-1 text-blue-600 hover:bg-blue-100 rounded transition-colors flex items-center gap-1"
+                  title="Скопировать"
+                >
+                  <Copy size={16} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Форма создания новой ссылки */}
+          <div className="flex gap-2 mb-6">
+            <input
+              type="text"
+              value={newSource}
+              onChange={(e) => setNewSource(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && generateReferralLink()}
+              placeholder="Название источника (например: instagram, youtube, vk)"
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            />
+            <button
+              onClick={generateReferralLink}
+              className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2"
+            >
+              <Plus size={18} />
+              Создать ссылку
+            </button>
+          </div>
+
+          {/* Список созданных ссылок */}
+          {referralLinks.length > 0 && (
+            <div className="space-y-3">
+              {referralLinks.map((item) => (
+                <div
+                  key={item.source}
+                  className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg border border-gray-200"
+                >
+                  <div className="flex-1">
+                    <div className="text-sm font-medium text-gray-700 mb-1">
+                      Источник: <span className="text-indigo-600">{item.source}</span>
+                    </div>
+                    <div className="text-sm text-gray-600 font-mono break-all">
+                      {item.link}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => copyToClipboard(item.link)}
+                    className="px-3 py-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors flex items-center gap-1"
+                    title="Скопировать ссылку"
+                  >
+                    <Copy size={18} />
+                  </button>
+                  <button
+                    onClick={() => removeReferralLink(item.source)}
+                    className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    title="Удалить"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {referralLinks.length === 0 && (
+            <div className="text-center py-8 text-gray-500">
+              <Link2 size={48} className="mx-auto mb-2 opacity-50" />
+              <p>Нет созданных ссылок</p>
+              <p className="text-sm">Создайте первую ссылку для отслеживания источников трафика</p>
+            </div>
+          )}
+
+          {/* Статистика по источникам */}
+          {sortedSources.length > 0 && (
+            <div className="mt-8 pt-8 border-t border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                Статистика по источникам трафика
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {sortedSources.map(([source, count]) => (
+                  <div
+                    key={source}
+                    className="flex items-center justify-between p-3 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg border border-indigo-100"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Users size={18} className="text-indigo-600" />
+                      <span className="font-medium text-gray-900">{source}</span>
+                    </div>
+                    <span className="text-lg font-bold text-indigo-600">{count}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-4 text-sm text-gray-500 text-center">
+                Всего пользователей: <span className="font-semibold text-gray-700">{users?.length || 0}</span>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="bg-white rounded-2xl shadow-lg p-8 border border-gray-100">
@@ -244,7 +380,7 @@ export default function EditBotPage() {
                 </label>
                 {welcomeTemplate && (
                   <Link
-                    href={`/bots/${botId}/templates`}
+                    href="/templates"
                     className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-full hover:bg-blue-200 transition-colors flex items-center gap-1"
                   >
                     <FileText size={14} />
@@ -271,7 +407,7 @@ export default function EditBotPage() {
                   <p className="text-xs text-blue-700 mb-2">
                     Бот использует шаблон "<strong>{welcomeTemplate.name}</strong>" вместо этого поля. 
                     Чтобы использовать это поле, деактивируйте или удалите шаблон на странице{' '}
-                    <Link href={`/bots/${botId}/templates`} className="underline font-semibold">
+                    <Link href="/templates" className="underline font-semibold">
                       Шаблоны
                     </Link>.
                   </p>

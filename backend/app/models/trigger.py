@@ -29,8 +29,14 @@ class Trigger(Base):
     name = Column(String, nullable=False)  # Название триггера
     event_type = Column(String, nullable=False)  # Тип события (TriggerEvent)
     conditions = Column(JSON, default={})  # Условия: {"days_inactive": 7, "source": "ad1", ...}
-    action_type = Column(String, nullable=False)  # Тип действия (TriggerAction)
-    action_data = Column(JSON, default={})  # Данные действия: {"message": "...", "tag_id": 1, ...}
+    
+    # Новое поле для множественных действий
+    actions = Column(JSON, default=[])  # Массив действий: [{"type": "send_message", "data": {...}}, ...]
+    
+    # Старые поля (для обратной совместимости, deprecated)
+    action_type = Column(String, nullable=True)  # Тип действия (TriggerAction) - deprecated
+    action_data = Column(JSON, default={})  # Данные действия - deprecated
+    
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

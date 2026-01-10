@@ -69,6 +69,8 @@ async def create_trigger(
     db: Session = Depends(get_db)
 ):
     """Создать новый триггер"""
+    logger.info(f"Creating trigger for bot {bot_id}. Data: {trigger_data.model_dump()}")
+    
     bot = db.query(Bot).filter(Bot.id == bot_id, Bot.owner_id == current_user.id).first()
     if not bot:
         raise HTTPException(

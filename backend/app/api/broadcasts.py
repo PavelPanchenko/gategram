@@ -2,11 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile
 from fastapi.datastructures import UploadFile as FastAPIUploadFile
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 import uuid
 import json
 import logging
+import re
 from pathlib import Path
 from app.core.database import get_db
 from app.core.config import settings
@@ -288,11 +289,52 @@ async def create_broadcast(
     scheduled_datetime = None
     if scheduled_at:
         try:
-            scheduled_datetime = datetime.fromisoformat(scheduled_at.replace('Z', '+00:00'))
-        except ValueError:
+            # Нормализуем формат: убираем миллисекунды и обрабатываем Z
+            normalized = scheduled_at.strip()
+            
+            # Убираем миллисекунды если есть (формат .000 или .123456)
+            # Формат может быть: 2026-01-09T20:56:00.000Z
+            # Используем регулярное выражение для более надежной обработки
+            # Убираем миллисекунды: заменяем .XXX на пустую строку перед Z или +
+            normalized = re.sub(r'\.\d+(?=[Z\+])', '', normalized)
+            # Если остались миллисекунды в конце (без Z/+), убираем их
+            if '.' in normalized and 'T' in normalized:
+                # Формат типа 2026-01-09T20:56:00.000 (без таймзоны)
+                normalized = normalized.split('.')[0]
+            
+            # Заменяем Z на +00:00 для правильного парсинга
+            if normalized.endswith('Z'):
+                normalized = normalized.replace('Z', '+00:00')
+            
+            # Если нет таймзоны, добавляем UTC
+            if 'T' in normalized and '+' not in normalized and normalized.count('-') <= 2:
+                # Время без таймзоны - добавляем секунды если нужно и таймзону UTC
+                parts = normalized.split('T')
+                if len(parts) == 2:
+                    date_part = parts[0]
+                    time_part = parts[1]
+                    # Добавляем секунды если их нет (формат HH:mm -> HH:mm:00)
+                    if time_part.count(':') == 1:
+                        time_part = time_part + ':00'
+                    normalized = f"{date_part}T{time_part}+00:00"
+            
+            # Парсим ISO формат
+            scheduled_datetime = datetime.fromisoformat(normalized)
+            
+            # Убеждаемся, что время в UTC (конвертируем если нужно)
+            if scheduled_datetime.tzinfo is None:
+                # Если naive datetime, считаем что это UTC и делаем aware
+                scheduled_datetime = scheduled_datetime.replace(tzinfo=timezone.utc)
+            else:
+                # Если aware datetime, конвертируем в UTC
+                scheduled_datetime = scheduled_datetime.astimezone(timezone.utc)
+            
+            logger.info(f"Parsed scheduled_at: {scheduled_at} -> {scheduled_datetime} (UTC aware)")
+        except (ValueError, AttributeError) as e:
+            logger.error(f"Error parsing scheduled_at: {scheduled_at}, error: {e}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid scheduled_at format"
+                detail=f"Invalid scheduled_at format: {scheduled_at}. Expected ISO format (e.g., 2026-01-09T23:50:00Z or 2026-01-09T23:50:00+00:00)"
             )
     
     # Определяем статус

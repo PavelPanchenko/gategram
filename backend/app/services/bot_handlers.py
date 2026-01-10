@@ -153,6 +153,8 @@ def setup_bot_handlers(router: Router, bot_id: int):
                     logger.info(f"Reactivated user {user_id} for bot {bot_id} (user sent /start, was marked as 'left')")
             
             db.commit()
+            # Обновляем объект из БД, чтобы убедиться, что все поля загружены
+            db.refresh(telegram_user)
             
             # Обрабатываем триггеры для нового пользователя
             if is_new_user:
@@ -175,9 +177,11 @@ def setup_bot_handlers(router: Router, bot_id: int):
             if template:
                 # Используем шаблон (приоритет)
                 welcome_text = process_template(template.content, telegram_user, {"source": source or "unknown"})
+                logger.debug(f"Using template for welcome message: {template.name}, processed: {welcome_text}")
             elif bot.welcome_message:
                 # Обрабатываем переменные в обычном welcome_message
                 welcome_text = process_template(bot.welcome_message, telegram_user, {"source": source or "unknown"})
+                logger.debug(f"Using welcome_message, original: {bot.welcome_message}, processed: {welcome_text}, user: first_name={telegram_user.first_name}, username={telegram_user.username}")
             else:
                 welcome_text = "Добро пожаловать!"
             
@@ -217,8 +221,11 @@ def setup_bot_handlers(router: Router, bot_id: int):
                 await message.answer(welcome_text)
                 
         except Exception as e:
-            logger.error(f"Error in cmd_start for bot {bot_id}: {e}")
-            await message.answer("Произошла ошибка. Попробуйте позже.")
+            logger.error(f"Error in cmd_start for bot {bot_id}: {e}", exc_info=True)
+            try:
+                await message.answer("Произошла ошибка. Попробуйте позже.")
+            except Exception as send_error:
+                logger.error(f"Failed to send error message to user {message.from_user.id}: {send_error}")
         finally:
             db.close()
     
@@ -459,6 +466,44 @@ def setup_bot_handlers(router: Router, bot_id: int):
             
         except Exception as e:
             logger.error(f"Error in handle_message for bot {bot_id}: {e}", exc_info=True)
+        finally:
+            db.close()
+    
+    @router.my_chat_member()
+    async def handle_my_chat_member(update: ChatMemberUpdated):
+        """Обработчик события блокировки/разблокировки бота пользователем"""
+        db = SessionLocal()
+        try:
+            user_id = update.from_user.id
+            old_status = update.old_chat_member.status
+            new_status = update.new_chat_member.status
+            
+            logger.info(f"Bot {bot_id}: User {user_id} changed bot status from {old_status} to {new_status}")
+            
+            # Получаем пользователя из БД
+            telegram_user = db.query(TelegramUser).filter(
+                TelegramUser.bot_id == bot_id,
+                TelegramUser.telegram_user_id == user_id
+            ).first()
+            
+            # Если пользователь заблокировал бота (kicked/banned)
+            if new_status in ["kicked", "banned"]:
+                if telegram_user:
+                    telegram_user.status = UserStatus.BLOCKED.value
+                    telegram_user.last_activity = datetime.utcnow()
+                    db.commit()
+                    logger.info(f"User {user_id} blocked bot {bot_id}, status updated to 'blocked'")
+            
+            # Если пользователь разблокировал бота (member)
+            elif new_status == "member" and old_status in ["kicked", "banned"]:
+                if telegram_user:
+                    telegram_user.status = UserStatus.ACTIVE.value
+                    telegram_user.last_activity = datetime.utcnow()
+                    db.commit()
+                    logger.info(f"User {user_id} unblocked bot {bot_id}, status updated to 'active'")
+                    
+        except Exception as e:
+            logger.error(f"Error in handle_my_chat_member for bot {bot_id}: {e}", exc_info=True)
         finally:
             db.close()
     

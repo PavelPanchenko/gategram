@@ -1,6 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api, TelegramUser } from '@/app/lib/api'
 
+export function useAllUsers(botId?: number, status?: string, source?: string) {
+  return useQuery({
+    queryKey: ['users', 'all', botId, status, source],
+    queryFn: () => api.getAllUsers(botId, status, source),
+  })
+}
+
 export function useBotUsers(botId: number, status?: string, source?: string) {
   return useQuery({
     queryKey: ['bots', botId, 'users', status, source],
@@ -24,6 +31,7 @@ export function useBlockUser() {
     }) => api.blockUser(botId, userId, blocked),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['bots', variables.botId, 'users'] })
+      queryClient.invalidateQueries({ queryKey: ['users', 'all'] })
     },
   })
 }
@@ -47,6 +55,7 @@ export function useSendMessageToUser() {
     }) => api.sendMessageToUser(botId, userId, messageText, mediaFile, mediaType),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['bots', variables.botId, 'users'] })
+      queryClient.invalidateQueries({ queryKey: ['users', 'all'] })
     },
   })
 }

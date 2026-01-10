@@ -11,7 +11,7 @@ from aiogram.types import FSInputFile
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict
 from pathlib import Path
 from sqlalchemy.orm import Session
@@ -50,6 +50,22 @@ def send_broadcast_task(self: Task, broadcast_id: int):
             logger.info(f"Broadcast {broadcast_id} was cancelled")
             return
         
+        # Если рассылка запланирована, проверяем, что время наступило
+        if broadcast.status == BroadcastStatus.SCHEDULED.value and broadcast.scheduled_at:
+            now = datetime.now(timezone.utc)  # UTC aware datetime
+            # Убеждаемся, что scheduled_at тоже aware datetime в UTC
+            scheduled_time = broadcast.scheduled_at
+            if scheduled_time.tzinfo is None:
+                # Если naive, считаем что это UTC
+                scheduled_time = scheduled_time.replace(tzinfo=timezone.utc)
+            else:
+                # Если aware, конвертируем в UTC
+                scheduled_time = scheduled_time.astimezone(timezone.utc)
+            
+            if scheduled_time > now:
+                logger.info(f"Broadcast {broadcast_id} is scheduled for {scheduled_time}, current time is {now}, skipping")
+                return
+        
         # Обновляем статус на "отправка"
         broadcast.status = BroadcastStatus.SENDING.value
         broadcast.started_at = datetime.utcnow()
@@ -78,8 +94,14 @@ def send_broadcast_task(self: Task, broadcast_id: int):
             logger.warning(f"No active users for bot {broadcast.bot_id}")
             broadcast.status = BroadcastStatus.COMPLETED.value
             broadcast.completed_at = datetime.utcnow()
+            broadcast.total_users = 0
             db.commit()
             return
+        
+        # Обновляем total_users на основе актуального количества пользователей
+        # (может измениться, если пользователи заблокировали бота после создания рассылки)
+        broadcast.total_users = len(users)
+        db.commit()
         
         # Логируем информацию о рассылке
         logger.info(f"Starting broadcast {broadcast_id}: media_type={broadcast.media_type}, media_url={broadcast.media_url}, media_files={broadcast.media_files}, message_text length={len(broadcast.message_text)}")
@@ -154,7 +176,7 @@ async def _send_broadcast_async(
             for user in batch:
                 task = _send_message_to_user(
                     bot, 
-                    user.telegram_user_id, 
+                    user,  # Передаем объект пользователя напрямую
                     broadcast.message_text, 
                     db, 
                     broadcast.id,
@@ -173,8 +195,12 @@ async def _send_broadcast_async(
                 if isinstance(result, Exception):
                     failed_count += 1
                     logger.error(f"Failed to send to user {user.telegram_user_id}: {result}")
-                else:
+                elif result is True:
                     sent_count += 1
+                else:
+                    # result is False - пользователь заблокировал бота или другая ошибка
+                    failed_count += 1
+                    logger.warning(f"Failed to send to user {user.telegram_user_id}: message not delivered")
             
             # Обновляем счетчики в БД
             broadcast.sent_count = sent_count
@@ -229,7 +255,7 @@ async def _send_broadcast_async(
 
 async def _send_message_to_user(
     bot: Bot,
-    telegram_user_id: int,
+    user: TelegramUser,
     message_text: str,
     db: Session,
     broadcast_id: int,
@@ -240,29 +266,41 @@ async def _send_message_to_user(
 ) -> bool:
     """Отправляет сообщение одному пользователю"""
     try:
-        # Получаем пользователя для обработки шаблона
-        user = db.query(TelegramUser).filter(
-            TelegramUser.telegram_user_id == telegram_user_id
-        ).first()
+        telegram_user_id = user.telegram_user_id
         
-        # Если используется шаблон, обрабатываем переменные
-        final_message_text = message_text
-        if template_id and user:
+        # Обновляем объект пользователя из БД, чтобы получить актуальные данные
+        db.refresh(user)
+        
+        # Обрабатываем переменные в сообщении
+        from app.utils.template_processor import process_template
+        
+        # Если используется шаблон, используем его содержимое
+        if template_id:
             from app.models.message_template import MessageTemplate
-            from app.utils.template_processor import process_template
             template = db.query(MessageTemplate).filter(
                 MessageTemplate.id == template_id
             ).first()
             if template:
+                # Используем содержимое шаблона и обрабатываем переменные
                 final_message_text = process_template(template.content, user, {})
+            else:
+                # Шаблон не найден, используем message_text и обрабатываем переменные
+                logger.warning(f"Template {template_id} not found for user {telegram_user_id}")
+                final_message_text = process_template(message_text, user, {})
+        else:
+            # Шаблон не используется, обрабатываем переменные в message_text
+            final_message_text = process_template(message_text, user, {})
         
         # Обновляем last_activity пользователя
         if user:
             user.last_activity = datetime.utcnow()
             db.commit()
         
+        # Финальная проверка перед отправкой
+        if '{{' in final_message_text:
+            logger.warning(f"Variables not processed for user {telegram_user_id}")
+        
         # Отправляем медиа-группу, если есть несколько файлов
-        logger.info(f"_send_message_to_user: media_files={media_files}, type={type(media_files)}, len={len(media_files) if media_files else 0}")
         if media_files and len(media_files) > 0:
             from aiogram.types import InputMediaPhoto, InputMediaVideo, InputMediaDocument, InputMediaAudio
             
@@ -413,11 +451,11 @@ async def _send_message_to_user(
                     logger.error(f"Error sending media as URL/file_id to user {telegram_user_id}: {e}", exc_info=True)
                     # Fallback: отправляем только текст
                     logger.warning(f"Falling back to text-only message for user {telegram_user_id}")
-                    await bot.send_message(chat_id=telegram_user_id, text=message_text)
+                    await bot.send_message(chat_id=telegram_user_id, text=final_message_text)
         else:
             # Нет медиа, отправляем только текст
             logger.info(f"No media, sending text only to user {telegram_user_id}. media_type={media_type}, media_url={media_url}")
-            await bot.send_message(chat_id=telegram_user_id, text=message_text)
+            await bot.send_message(chat_id=telegram_user_id, text=final_message_text)
         
         # Логируем успешную отправку
         log = BroadcastLog(
@@ -471,6 +509,47 @@ async def _send_message_to_user(
         db.add(log)
         db.commit()
         return False
+
+
+@celery_app.task(name="check_scheduled_broadcasts")
+def check_scheduled_broadcasts_task():
+    """Проверяет запланированные рассылки и запускает те, время которых наступило"""
+    db = SessionLocal()
+    try:
+        now = datetime.now(timezone.utc)  # UTC aware datetime
+        
+        # Находим все запланированные рассылки, время которых наступило
+        # SQLAlchemy автоматически обработает сравнение aware datetime с timezone=True колонкой
+        scheduled_broadcasts = db.query(Broadcast).filter(
+            Broadcast.status == BroadcastStatus.SCHEDULED.value,
+            Broadcast.scheduled_at.isnot(None),
+            Broadcast.scheduled_at <= now
+        ).all()
+        
+        logger.info(f"Found {len(scheduled_broadcasts)} scheduled broadcasts ready to send")
+        
+        for broadcast in scheduled_broadcasts:
+            try:
+                logger.info(f"Starting scheduled broadcast {broadcast.id} (scheduled for {broadcast.scheduled_at})")
+                # Запускаем задачу отправки
+                send_broadcast_task.delay(broadcast.id)
+            except Exception as e:
+                logger.error(f"Error starting scheduled broadcast {broadcast.id}: {e}", exc_info=True)
+                # Помечаем рассылку как failed
+                broadcast.status = BroadcastStatus.FAILED.value
+                db.commit()
+        
+        return {
+            "checked": len(scheduled_broadcasts),
+            "started": len(scheduled_broadcasts)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in check_scheduled_broadcasts_task: {e}", exc_info=True)
+        db.rollback()
+        raise
+    finally:
+        db.close()
 
 
 @celery_app.task(name="cleanup_old_media_files")

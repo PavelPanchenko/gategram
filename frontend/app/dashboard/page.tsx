@@ -6,6 +6,7 @@ import { useAnalyticsOverview, useBotComparison, useConversionFunnel } from '@/a
 import Link from 'next/link'
 import { useState } from 'react'
 import { Bot, Users, CheckCircle, Send, Calendar, TrendingUp, BarChart3, Target, Edit2, Play, Pause, Trash2 } from 'lucide-react'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
 export default function DashboardPage() {
   const { data: bots, isLoading: botsLoading, error: botsError } = useBots()
@@ -147,29 +148,58 @@ export default function DashboardPage() {
             <h2 className="text-xl font-semibold text-gray-900">Новые пользователи</h2>
           </div>
           {analytics.users_by_day && analytics.users_by_day.length > 0 ? (
-            <div className="h-64 flex items-end justify-between gap-2">
-              {analytics.users_by_day.map((point, index) => {
-                const maxCount = Math.max(...analytics.users_by_day.map((p) => p.count), 1)
-                const height = (point.count / maxCount) * 100
-                return (
-                  <div key={index} className="flex-1 flex flex-col items-center">
-                    <div
-                      className="w-full bg-indigo-500 rounded-t hover:bg-indigo-600 transition-colors cursor-pointer"
-                      style={{ height: `${Math.max(height, 5)}%` }}
-                      title={`${new Date(point.date).toLocaleDateString('ru-RU')}: ${point.count}`}
-                    />
-                    <div className="text-xs text-gray-500 mt-2 text-center">
-                      {new Date(point.date).toLocaleDateString('ru-RU', {
-                        day: 'numeric',
-                        month: 'short',
-                      })}
-                    </div>
-                  </div>
-                )
-              })}
+            <div className="space-y-4">
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart
+                  data={analytics.users_by_day.map(point => ({
+                    date: new Date(point.date).toLocaleDateString('ru-RU', {
+                      day: 'numeric',
+                      month: 'short',
+                    }),
+                    count: point.count,
+                    fullDate: new Date(point.date).toLocaleDateString('ru-RU')
+                  }))}
+                  margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis 
+                    dataKey="date" 
+                    stroke="#6b7280"
+                    style={{ fontSize: '12px' }}
+                  />
+                  <YAxis 
+                    stroke="#6b7280"
+                    style={{ fontSize: '12px' }}
+                    allowDecimals={false}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#1f2937',
+                      border: 'none',
+                      borderRadius: '8px',
+                      color: 'white',
+                      padding: '8px 12px'
+                    }}
+                    labelStyle={{ color: 'white', fontWeight: 'bold' }}
+                    formatter={(value: number) => [`${value} пользователей`, '']}
+                  />
+                  <Bar 
+                    dataKey="count" 
+                    fill="#6366f1"
+                    radius={[8, 8, 0, 0]}
+                    maxBarSize={60}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+              <div className="text-sm text-gray-600 text-center">
+                Показаны последние {analytics.users_by_day.length} {analytics.users_by_day.length === 1 ? 'день' : 'дней'}
+              </div>
             </div>
           ) : (
-            <p className="text-gray-500 text-center py-12">Нет данных за последние 30 дней</p>
+            <div className="text-center py-12">
+              <p className="text-gray-500 mb-2">Нет данных за последние 30 дней</p>
+              <p className="text-sm text-gray-400">Пользователи появятся на графике после регистрации</p>
+            </div>
           )}
         </div>
 
@@ -260,12 +290,17 @@ export default function DashboardPage() {
         {/* Воронка конверсии */}
         {bots && bots.length > 0 && (
           <div className="bg-white p-6 rounded-lg border border-gray-200">
-            <div className="flex justify-between items-center mb-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-green-50 rounded-lg">
-                  <Target size={20} className="text-green-600" />
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="p-2 bg-green-50 rounded-lg">
+                    <Target size={20} className="text-green-600" />
+                  </div>
+                  <h2 className="text-xl font-semibold text-gray-900">Воронка конверсии</h2>
                 </div>
-                <h2 className="text-xl font-semibold text-gray-900">Воронка конверсии</h2>
+                <p className="text-sm text-gray-600 ml-11">
+                  Показывает путь пользователя от первого контакта до активного использования
+                </p>
               </div>
               <select
                 value={selectedBotId || ''}
@@ -283,24 +318,47 @@ export default function DashboardPage() {
               <div className="text-center py-8">Загрузка...</div>
             ) : funnel && funnel.length > 0 ? (
               <div className="space-y-4">
-                {funnel.map((step, index) => (
-                  <div key={index} className="flex items-center gap-4">
-                    <div className="w-32 text-sm font-medium">{step.step}</div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
+                {funnel.map((step, index) => {
+                  const stepLabels: Record<string, string> = {
+                    'started': '🚀 Начали (нажали /start)',
+                    'active': '✅ Активные (не заблокировали)',
+                    'interacted': '💬 Взаимодействовали'
+                  }
+                  const colors = ['bg-blue-500', 'bg-green-500', 'bg-purple-500']
+                  
+                  return (
+                    <div key={index} className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm font-medium text-gray-700">
+                          {stepLabels[step.step] || step.step}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg font-bold text-gray-900">{step.count}</span>
+                          <span className="text-sm text-gray-500">({step.percentage.toFixed(1)}%)</span>
+                        </div>
+                      </div>
+                      <div className="relative h-8 bg-gray-100 rounded-lg overflow-hidden">
                         <div
-                          className="bg-indigo-500 h-8 rounded"
-                          style={{ width: `${step.percentage}%` }}
-                        />
-                        <span className="text-sm font-semibold">{step.count}</span>
-                        <span className="text-sm text-gray-500">({step.percentage.toFixed(1)}%)</span>
+                          className={`${colors[index]} h-full rounded-lg transition-all duration-500 flex items-center justify-end pr-3`}
+                          style={{ width: `${Math.max(step.percentage, 5)}%` }}
+                        >
+                          {step.percentage > 15 && (
+                            <span className="text-white text-sm font-medium">
+                              {step.count}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             ) : (
-              <div className="text-center text-gray-500 py-8">Нет данных для воронки</div>
+              <div className="text-center text-gray-500 py-8">
+                <Target size={48} className="mx-auto mb-2 opacity-50" />
+                <p>Нет данных для воронки</p>
+                <p className="text-sm mt-1">Данные появятся после регистрации пользователей</p>
+              </div>
             )}
           </div>
         )}
@@ -388,7 +446,7 @@ export default function DashboardPage() {
                       <Edit2 size={16} />
                     </Link>
                     <Link
-                      href={`/bots/${bot.id}/users`}
+                      href="/users"
                       className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
                       title="Пользователи"
                     >

@@ -24,33 +24,38 @@ export function useTrigger(botId: number, triggerId: number) {
   })
 }
 
-export function useCreateTrigger(botId: number) {
+export function useCreateTrigger() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (data: Partial<Trigger>) => api.createTrigger(botId, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['triggers', botId] })
+    mutationFn: ({ botId, data }: { botId: number; data: Partial<Trigger> }) => 
+      api.createTrigger(botId, data),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['triggers', variables.botId] })
+      queryClient.invalidateQueries({ queryKey: ['all-triggers'] })
     },
   })
 }
 
-export function useUpdateTrigger(botId: number) {
+export function useUpdateTrigger() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ triggerId, data }: { triggerId: number; data: Partial<Trigger> }) =>
+    mutationFn: ({ botId, triggerId, data }: { botId: number; triggerId: number; data: Partial<Trigger> }) =>
       api.updateTrigger(botId, triggerId, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['triggers', botId] })
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['triggers', variables.botId] })
+      queryClient.invalidateQueries({ queryKey: ['all-triggers'] })
     },
   })
 }
 
-export function useDeleteTrigger(botId: number) {
+export function useDeleteTrigger() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (triggerId: number) => api.deleteTrigger(botId, triggerId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['triggers', botId] })
+    mutationFn: ({ botId, triggerId }: { botId: number; triggerId: number }) => 
+      api.deleteTrigger(botId, triggerId),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['triggers', variables.botId] })
+      queryClient.invalidateQueries({ queryKey: ['all-triggers'] })
     },
   })
 }

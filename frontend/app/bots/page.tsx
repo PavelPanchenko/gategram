@@ -119,7 +119,7 @@ export default function BotsPage() {
                     <Edit2 size={16} />
                   </Link>
                   <Link
-                    href={`/bots/${bot.id}/users`}
+                    href="/users"
                     className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
                     title="Пользователи"
                   >

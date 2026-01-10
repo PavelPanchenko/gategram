@@ -9,7 +9,7 @@ from starlette.responses import Response
 from contextlib import asynccontextmanager
 from app.core.config import settings
 from app.core.database import SessionLocal
-from app.api import auth, bots, broadcasts, analytics, message_templates, user_tags, triggers, global_templates, global_tags, global_triggers, global_users
+from app.api import auth, bots, broadcasts, analytics, message_templates, user_tags, triggers, global_templates, global_tags, global_triggers, global_users, health
 from app.models.bot import Bot
 from app.services.bot_manager import bot_manager
 from app.services.bot_handlers import setup_bot_handlers
@@ -247,6 +247,7 @@ app.include_router(global_templates.router)
 app.include_router(global_tags.router)
 app.include_router(global_triggers.router)
 app.include_router(global_users.router)
+app.include_router(health.router)
 
 
 @app.get("/")

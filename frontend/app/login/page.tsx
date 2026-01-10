@@ -12,7 +12,7 @@ type FormData = {
 export default function LoginPage() {
   const [isRegister, setIsRegister] = useState(false)
   const { login, register, isLoggingIn, isRegistering } = useAuth()
-  const [error, setError] = useState('')
+  const [error, setError] = useState<string | null>(null)
 
   const {
     register: registerField,
@@ -21,15 +21,19 @@ export default function LoginPage() {
   } = useForm<FormData>()
 
   const onSubmit = async (data: FormData) => {
-    setError('')
-    try {
-      if (isRegister) {
-        register(data)
-      } else {
-        login(data)
-      }
-    } catch (err: any) {
-      setError(err.message || 'Произошла ошибка')
+    setError(null)
+    if (isRegister) {
+      register(data, {
+        onError: (error: Error) => {
+          setError(error.message || 'Ошибка при регистрации')
+        },
+      })
+    } else {
+      login(data, {
+        onError: (error: Error) => {
+          setError(error.message || 'Неверный email или пароль')
+        },
+      })
     }
   }
 
@@ -111,7 +115,10 @@ export default function LoginPage() {
           <div className="text-center">
             <button
               type="button"
-              onClick={() => setIsRegister(!isRegister)}
+              onClick={() => {
+                setError(null)
+                setIsRegister(!isRegister)
+              }}
               className="text-sm text-indigo-600 hover:text-indigo-500"
             >
               {isRegister ? 'Уже есть аккаунт? Войти' : 'Нет аккаунта? Зарегистрироваться'}

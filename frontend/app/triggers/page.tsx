@@ -2,10 +2,12 @@
 
 import { useState } from 'react'
 import DashboardLayout from '@/app/components/DashboardLayout'
+import Modal from '@/app/components/Modal'
 import { useAllTriggers } from '@/app/hooks/useTriggers'
 import { useBots } from '@/app/hooks/useBots'
 import { useCreateTrigger, useUpdateTrigger, useDeleteTrigger } from '@/app/hooks/useTriggers'
 import { useTags } from '@/app/hooks/useTags'
+import { useAllTemplates } from '@/app/hooks/useTemplates'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -16,7 +18,7 @@ import Link from 'next/link'
 const triggerSchema = z.object({
   name: z.string().min(1, 'Название обязательно'),
   event_type: z.string().min(1, 'Тип события обязателен'),
-  action_type: z.string().min(1, 'Тип действия обязателен'),
+  action_type: z.string().optional(), // Теперь необязательно, используется для обратной совместимости
   is_active: z.boolean().default(true),
   bot_id: z.string().optional(),
   conditions: z.record(z.string(), z.unknown()).optional(),
@@ -38,23 +40,30 @@ const ACTION_TYPES = [
   { value: 'remove_tag', label: 'Удалить тег' },
 ]
 
+type Action = {
+  type: string
+  data: Record<string, any>
+}
+
 export default function TriggersPage() {
   const [selectedBotId, setSelectedBotId] = useState<number | undefined>(undefined)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editingBotId, setEditingBotId] = useState<number | null>(null)
   const [showForm, setShowForm] = useState(false)
+  const [actions, setActions] = useState<Action[]>([{ type: 'send_message', data: {} }])
 
   const { data: bots } = useBots()
   const { data: triggers, isLoading } = useAllTriggers(selectedBotId)
-  const createTrigger = useCreateTrigger(editingBotId || 0)
-  const updateTrigger = useUpdateTrigger(editingBotId || 0)
-  const deleteTrigger = useDeleteTrigger(editingBotId || 0)
+  const createTrigger = useCreateTrigger()
+  const updateTrigger = useUpdateTrigger()
+  const deleteTrigger = useDeleteTrigger()
 
   const {
     register,
     handleSubmit,
     reset,
     watch,
+    setValue,
     formState: { errors },
   } = useForm<TriggerFormData>({
     resolver: zodResolver(triggerSchema),
@@ -67,12 +76,12 @@ export default function TriggersPage() {
   })
 
   const eventType = watch('event_type')
-  const actionType = watch('action_type')
   
-  // Получаем теги для выбранного бота (используем selectedBotId или bot_id из формы)
+  // Получаем теги и шаблоны для выбранного бота (используем selectedBotId или bot_id из формы)
   const formBotId = watch('bot_id')
   const tagsBotId = selectedBotId || (formBotId ? parseInt(formBotId) : undefined)
   const { data: tags, isLoading: loadingTags } = useTags(tagsBotId || 0)
+  const { data: templates, isLoading: loadingTemplates } = useAllTemplates(tagsBotId)
 
   const onSubmit = async (data: TriggerFormData) => {
     // Используем выбранный в фильтре бот, если он есть, иначе из формы
@@ -81,47 +90,68 @@ export default function TriggersPage() {
       showToast.error('Выберите бота')
       return
     }
-    setEditingBotId(botId)
     
-    // Подготавливаем action_data - преобразуем tag_id в число, если есть
-    const actionData: any = {}
-    if (data.action_data) {
-      if (data.action_data.tag_id) {
-        actionData.tag_id = typeof data.action_data.tag_id === 'string' 
-          ? parseInt(data.action_data.tag_id) 
-          : data.action_data.tag_id
+    // Подготавливаем массив действий
+    const preparedActions = actions.map(action => {
+      const actionData: any = {}
+      
+      if (action.type === 'send_message') {
+        if (action.data.template_id) {
+          actionData.template_id = typeof action.data.template_id === 'string'
+            ? parseInt(action.data.template_id)
+            : action.data.template_id
+        }
+        if (action.data.message) {
+          actionData.message = action.data.message
+        }
+      } else if (action.type === 'add_tag' || action.type === 'remove_tag') {
+        if (action.data.tag_id) {
+          actionData.tag_id = typeof action.data.tag_id === 'string'
+            ? parseInt(action.data.tag_id)
+            : action.data.tag_id
+        }
       }
-      if (data.action_data.message) {
-        actionData.message = data.action_data.message
+      
+      return {
+        type: action.type,
+        data: actionData
+      }
+    })
+    
+    // Подготавливаем conditions - преобразуем days_inactive в число
+    const conditions: any = {}
+    if (data.conditions) {
+      if (data.conditions.days_inactive) {
+        conditions.days_inactive = typeof data.conditions.days_inactive === 'string'
+          ? parseInt(data.conditions.days_inactive)
+          : data.conditions.days_inactive
       }
     }
     
     try {
+      const triggerPayload = {
+        name: data.name,
+        event_type: data.event_type,
+        conditions: conditions,
+        actions: preparedActions,
+        is_active: data.is_active,
+      }
+      
       if (editingId) {
         await updateTrigger.mutateAsync({
+          botId,
           triggerId: editingId,
-          data: {
-            name: data.name,
-            event_type: data.event_type,
-            action_type: data.action_type,
-            conditions: data.conditions || {},
-            action_data: actionData,
-            is_active: data.is_active,
-          },
+          data: triggerPayload,
         })
         setEditingId(null)
-        setEditingBotId(null)
       } else {
         await createTrigger.mutateAsync({
-          name: data.name,
-          event_type: data.event_type,
-          action_type: data.action_type,
-          conditions: data.conditions || {},
-          action_data: actionData,
-          is_active: data.is_active,
+          botId,
+          data: triggerPayload,
         })
       }
       reset()
+      setActions([{ type: 'send_message', data: {} }]) // Сбрасываем действия
       setShowForm(false)
       showToast.success(editingId ? 'Триггер обновлен' : 'Триггер создан')
     } catch (error: any) {
@@ -132,17 +162,35 @@ export default function TriggersPage() {
   const handleEdit = (trigger: any) => {
     setEditingId(trigger.id)
     setEditingBotId(trigger.bot_id)
-    // Преобразуем tag_id в строку для select, если есть
-    const actionData = { ...(trigger.action_data || {}) }
-    if (actionData.tag_id) {
-      actionData.tag_id = actionData.tag_id.toString()
+    
+    // Загружаем действия из нового поля trigger.actions или старого формата
+    if (trigger.actions && Array.isArray(trigger.actions) && trigger.actions.length > 0) {
+      // Новый формат: массив действий в поле actions
+      setActions(trigger.actions.map((action: any) => ({
+        type: action.type,
+        data: {
+          ...action.data,
+          tag_id: action.data.tag_id?.toString(),
+          template_id: action.data.template_id?.toString()
+        }
+      })))
+    } else {
+      // Старый формат: одно действие в action_type/action_data
+      const actionData = trigger.action_data || {}
+      setActions([{
+        type: trigger.action_type || 'send_message',
+        data: {
+          ...actionData,
+          tag_id: actionData.tag_id?.toString(),
+          template_id: actionData.template_id?.toString()
+        }
+      }])
     }
+    
     reset({
       name: trigger.name,
       event_type: trigger.event_type,
-      action_type: trigger.action_type,
       conditions: trigger.conditions || {},
-      action_data: actionData,
       is_active: trigger.is_active,
       bot_id: trigger.bot_id.toString(),
     })
@@ -153,14 +201,11 @@ export default function TriggersPage() {
     confirmAction(
       `Вы уверены, что хотите удалить триггер "${trigger.name}"?`,
       async () => {
-        setEditingBotId(trigger.bot_id)
         try {
-          await deleteTrigger.mutateAsync(trigger.id)
+          await deleteTrigger.mutateAsync({ botId: trigger.bot_id, triggerId: trigger.id })
           showToast.success('Триггер удален')
         } catch (error: any) {
           showToast.error(error.message || 'Ошибка при удалении триггера')
-        } finally {
-          setEditingBotId(null)
         }
       },
       undefined,
@@ -169,9 +214,9 @@ export default function TriggersPage() {
   }
 
   const handleToggleActive = async (trigger: any) => {
-    setEditingBotId(trigger.bot_id)
     try {
       await updateTrigger.mutateAsync({
+        botId: trigger.bot_id,
         triggerId: trigger.id,
         data: {
           name: trigger.name,
@@ -185,8 +230,6 @@ export default function TriggersPage() {
       showToast.success(trigger.is_active ? 'Триггер деактивирован' : 'Триггер активирован')
     } catch (error: any) {
       showToast.error(error.message || 'Ошибка при изменении статуса триггера')
-    } finally {
-      setEditingBotId(null)
     }
   }
 
@@ -277,11 +320,20 @@ export default function TriggersPage() {
           </div>
         ) : null}
 
-        {/* Форма создания/редактирования */}
-        {showForm && (
-          <div className="bg-white p-6 rounded-lg border border-gray-200">
-            <h2 className="text-xl font-semibold mb-4">{editingId ? 'Редактировать триггер' : 'Создать триггер'}</h2>
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        {/* Модальное окно создания/редактирования */}
+        <Modal
+          isOpen={showForm}
+          onClose={() => {
+            setShowForm(false)
+            setEditingId(null)
+            setEditingBotId(null)
+            setActions([{ type: 'send_message', data: {} }])
+            reset()
+          }}
+          title={editingId ? 'Редактировать триггер' : 'Создать триггер'}
+          size="xl"
+        >
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               {!selectedBotId && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Бот</label>
@@ -334,65 +386,153 @@ export default function TriggersPage() {
                 {errors.event_type && <p className="text-red-500 text-sm mt-1">{errors.event_type.message}</p>}
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Тип действия</label>
-                <select
-                  {...register('action_type')}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                >
-                  <option value="">Выберите тип действия</option>
-                  {ACTION_TYPES.map((type) => (
-                    <option key={type.value} value={type.value}>
-                      {type.label}
-                    </option>
-                  ))}
-                </select>
-                {errors.action_type && <p className="text-red-500 text-sm mt-1">{errors.action_type.message}</p>}
-              </div>
-
-              {actionType === 'send_message' && (
+              {eventType === 'user_inactive' && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Текст сообщения</label>
-                  <textarea
-                    {...register('action_data.message')}
-                    rows={4}
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Период неактивности</label>
+                  <select
+                    {...register('conditions.days_inactive')}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                    placeholder="Текст сообщения или ID шаблона"
-                  />
+                  >
+                    <option value="7">1 неделя (7 дней)</option>
+                    <option value="14">2 недели (14 дней)</option>
+                    <option value="30">1 месяц (30 дней)</option>
+                    <option value="90">3 месяца (90 дней)</option>
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Триггер сработает для пользователей, которые не проявляли активность указанное количество дней
+                  </p>
                 </div>
               )}
 
-              {(actionType === 'add_tag' || actionType === 'remove_tag') && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Выберите тег</label>
-                  {!tagsBotId ? (
-                    <p className="text-sm text-gray-500">Сначала выберите бота</p>
-                  ) : loadingTags ? (
-                    <p className="text-sm text-gray-500">Загрузка тегов...</p>
-                  ) : tags && tags.length > 0 ? (
-                    <select
-                      {...register('action_data.tag_id', {
-                        setValueAs: (v) => v ? parseInt(v) : undefined
-                      })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                    >
-                      <option value="">Выберите тег</option>
-                      {tags.map((tag) => (
-                        <option key={tag.id} value={tag.id}>
-                          {tag.name}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                      <p className="text-sm text-yellow-800">
-                        Нет созданных тегов для этого бота. Создайте теги на странице{' '}
-                        <Link href="/tags" className="underline font-semibold">Теги</Link>.
-                      </p>
-                    </div>
-                  )}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <label className="block text-sm font-medium text-gray-700">Действия</label>
+                  <button
+                    type="button"
+                    onClick={() => setActions([...actions, { type: 'send_message', data: {} }])}
+                    className="text-sm text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+                  >
+                    <Plus size={16} />
+                    Добавить действие
+                  </button>
                 </div>
-              )}
+                
+                {actions.map((action, index) => (
+                  <div key={index} className="border border-gray-200 rounded-lg p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <select
+                        value={action.type}
+                        onChange={(e) => {
+                          const newActions = [...actions]
+                          newActions[index] = { type: e.target.value, data: {} }
+                          setActions(newActions)
+                        }}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                      >
+                        {ACTION_TYPES.map((type) => (
+                          <option key={type.value} value={type.value}>
+                            {type.label}
+                          </option>
+                        ))}
+                      </select>
+                      {actions.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => setActions(actions.filter((_, i) => i !== index))}
+                          className="ml-2 text-red-600 hover:text-red-800"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      )}
+                    </div>
+
+                    {action.type === 'send_message' && (
+                      <div className="space-y-3">
+                        {!tagsBotId ? (
+                          <p className="text-sm text-gray-500">Сначала выберите бота</p>
+                        ) : loadingTemplates ? (
+                          <p className="text-sm text-gray-500">Загрузка шаблонов...</p>
+                        ) : templates && templates.length > 0 ? (
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Шаблон</label>
+                            <select
+                              value={action.data.template_id || ''}
+                              onChange={(e) => {
+                                const newActions = [...actions]
+                                const templateId = e.target.value
+                                if (templateId) {
+                                  const template = templates.find(t => t.id === Number(templateId))
+                                  newActions[index].data = {
+                                    ...newActions[index].data,
+                                    template_id: templateId,
+                                    message: template?.content || ''
+                                  }
+                                } else {
+                                  newActions[index].data = { ...newActions[index].data, template_id: '', message: '' }
+                                }
+                                setActions(newActions)
+                              }}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                            >
+                              <option value="">Не использовать шаблон</option>
+                              {templates.map((template) => (
+                                <option key={template.id} value={template.id}>
+                                  {template.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        ) : null}
+                        
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Текст сообщения</label>
+                          <textarea
+                            value={action.data.message || ''}
+                            onChange={(e) => {
+                              const newActions = [...actions]
+                              newActions[index].data = { ...newActions[index].data, message: e.target.value }
+                              setActions(newActions)
+                            }}
+                            rows={3}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                            placeholder="Введите текст сообщения"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {(action.type === 'add_tag' || action.type === 'remove_tag') && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Тег</label>
+                        {!tagsBotId ? (
+                          <p className="text-sm text-gray-500">Сначала выберите бота</p>
+                        ) : loadingTags ? (
+                          <p className="text-sm text-gray-500">Загрузка тегов...</p>
+                        ) : tags && tags.length > 0 ? (
+                          <select
+                            value={action.data.tag_id || ''}
+                            onChange={(e) => {
+                              const newActions = [...actions]
+                              newActions[index].data = { ...newActions[index].data, tag_id: e.target.value }
+                              setActions(newActions)
+                            }}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                          >
+                            <option value="">Выберите тег</option>
+                            {tags.map((tag) => (
+                              <option key={tag.id} value={tag.id}>
+                                {tag.name}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <p className="text-sm text-gray-500">Нет тегов</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
 
               <div className="flex items-center">
                 <input
@@ -406,29 +546,29 @@ export default function TriggersPage() {
                 </label>
               </div>
 
-              <div className="flex gap-2">
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
-                >
-                  {editingId ? 'Сохранить' : 'Создать'}
-                </button>
+              <div className="flex gap-2 justify-end">
                 <button
                   type="button"
                   onClick={() => {
                     setShowForm(false)
                     setEditingId(null)
                     setEditingBotId(null)
+                    setActions([{ type: 'send_message', data: {} }])
                     reset()
                   }}
                   className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
                 >
                   Отмена
                 </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                >
+                  {editingId ? 'Сохранить' : 'Создать'}
+                </button>
               </div>
             </form>
-          </div>
-        )}
+        </Modal>
 
         {/* Список триггеров */}
         {isLoading ? (
@@ -461,9 +601,11 @@ export default function TriggersPage() {
                         </span>
                       </p>
                       <p className="text-sm">
-                        <span className="font-medium text-gray-700">Действие:</span>{' '}
+                        <span className="font-medium text-gray-700">Действия:</span>{' '}
                         <span className="text-gray-600">
-                          {ACTION_TYPES.find((t) => t.value === trigger.action_type)?.label || trigger.action_type}
+                          {trigger.actions && trigger.actions.length > 0
+                            ? `${trigger.actions.length} ${trigger.actions.length === 1 ? 'действие' : trigger.actions.length < 5 ? 'действия' : 'действий'}`
+                            : ACTION_TYPES.find((t) => t.value === trigger.action_type)?.label || trigger.action_type}
                         </span>
                       </p>
                     </div>

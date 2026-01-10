@@ -96,7 +96,7 @@ class BotManager:
                 logger.info(f"Starting polling for bot {bot_id}")
                 await dp.start_polling(
                     bot, 
-                    allowed_updates=["message", "callback_query", "chat_member"],
+                    allowed_updates=["message", "callback_query", "chat_member", "my_chat_member"],
                     handle_as_tasks=False
                 )
                 # Если polling завершился нормально (не из-за ошибки), выходим

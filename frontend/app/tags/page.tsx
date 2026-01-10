@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import DashboardLayout from '@/app/components/DashboardLayout'
+import Modal from '@/app/components/Modal'
 import { useAllTags } from '@/app/hooks/useTags'
 import { useBots } from '@/app/hooks/useBots'
 import { useCreateTag, useUpdateTag, useDeleteTag } from '@/app/hooks/useTags'
@@ -28,13 +29,11 @@ export default function TagsPage() {
   const [showForm, setShowForm] = useState(false)
 
   const { data: bots } = useBots()
-  const { data: tags, isLoading, refetch: refetchTags } = useAllTags(selectedBotId)
+  const { data: tags, isLoading } = useAllTags(selectedBotId)
   
-  // Используем временное состояние для botId при создании/редактировании
-  const [currentBotId, setCurrentBotId] = useState<number | null>(null)
-  const createTag = useCreateTag(currentBotId || 0)
-  const updateTag = useUpdateTag(currentBotId || 0)
-  const deleteTag = useDeleteTag(currentBotId || 0)
+  const createTag = useCreateTag()
+  const updateTag = useUpdateTag()
+  const deleteTag = useDeleteTag()
 
   const {
     register,
@@ -56,26 +55,25 @@ export default function TagsPage() {
       showToast.error('Выберите бота')
       return
     }
-    setCurrentBotId(botId)
-    setEditingBotId(botId)
     
     try {
       if (editingId) {
-        await updateTag.mutateAsync({ tagId: editingId, data: { name: data.name, color: data.color, description: data.description || undefined } })
+        await updateTag.mutateAsync({ 
+          botId, 
+          tagId: editingId, 
+          data: { name: data.name, color: data.color, description: data.description || undefined } 
+        })
         setEditingId(null)
-        setEditingBotId(null)
-        setCurrentBotId(null)
       } else {
-        await createTag.mutateAsync({ name: data.name, color: data.color, description: data.description || undefined })
-        setCurrentBotId(null)
+        await createTag.mutateAsync({ 
+          botId, 
+          data: { name: data.name, color: data.color, description: data.description || undefined } 
+        })
       }
-      // Обновляем список тегов
-      await refetchTags()
       reset()
       setShowForm(false)
       showToast.success(editingId ? 'Тег обновлен' : 'Тег создан')
     } catch (error: any) {
-      setCurrentBotId(null)
       showToast.error(error.message || 'Ошибка при сохранении тега')
     }
   }
@@ -96,18 +94,11 @@ export default function TagsPage() {
     confirmAction(
       `Вы уверены, что хотите удалить тег "${tag.name}"?`,
       async () => {
-        setCurrentBotId(tag.bot_id)
-        setEditingBotId(tag.bot_id)
         try {
-          await deleteTag.mutateAsync(tag.id)
-          // Обновляем список тегов
-          await refetchTags()
+          await deleteTag.mutateAsync({ botId: tag.bot_id, tagId: tag.id })
           showToast.success('Тег удален')
         } catch (error: any) {
           showToast.error(error.message || 'Ошибка при удалении тега')
-        } finally {
-          setEditingBotId(null)
-          setCurrentBotId(null)
         }
       },
       undefined,
@@ -175,88 +166,94 @@ export default function TagsPage() {
           </div>
         </div>
 
-        {/* Форма создания/редактирования */}
-        {showForm && (
-          <div className="bg-white p-6 rounded-lg border border-gray-200">
-            <h2 className="text-xl font-semibold mb-4">{editingId ? 'Редактировать тег' : 'Создать тег'}</h2>
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-              {!selectedBotId && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Бот</label>
-                  <select
-                    {...register('bot_id')}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                    disabled={!!editingId}
-                  >
-                    <option value="">Выберите бота</option>
-                    {bots?.map((bot) => (
-                      <option key={bot.id} value={bot.id}>
-                        {bot.name || bot.username || `Bot #${bot.id}`}
-                      </option>
-                    ))}
-                  </select>
-                  {errors.bot_id && <p className="text-red-500 text-sm mt-1">{errors.bot_id.message}</p>}
-                </div>
-              )}
-              {selectedBotId && !editingId && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                  <p className="text-sm text-blue-800">
-                    <strong>Бот:</strong> {getBotName(selectedBotId)}
-                  </p>
-                </div>
-              )}
-
+        {/* Модальное окно создания/редактирования */}
+        <Modal
+          isOpen={showForm}
+          onClose={() => {
+            setShowForm(false)
+            setEditingId(null)
+            setEditingBotId(null)
+            reset()
+          }}
+          title={editingId ? 'Редактировать тег' : 'Создать тег'}
+        >
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            {!selectedBotId && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Название</label>
-                <input
-                  {...register('name')}
+                <label className="block text-sm font-medium text-gray-700 mb-1">Бот</label>
+                <select
+                  {...register('bot_id')}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                  placeholder="Например: VIP"
-                />
-                {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name.message}</p>}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Цвет</label>
-                <input
-                  {...register('color')}
-                  type="color"
-                  className="h-10 w-full border border-gray-300 rounded-lg focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Описание (необязательно)</label>
-                <input
-                  {...register('description')}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                  placeholder="Описание тега"
-                />
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                  disabled={!!editingId}
                 >
-                  {editingId ? 'Сохранить' : 'Создать'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowForm(false)
-                    setEditingId(null)
-                    setEditingBotId(null)
-                    reset()
-                  }}
-                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
-                >
-                  Отмена
-                </button>
+                  <option value="">Выберите бота</option>
+                  {bots?.map((bot) => (
+                    <option key={bot.id} value={bot.id}>
+                      {bot.name || bot.username || `Bot #${bot.id}`}
+                    </option>
+                  ))}
+                </select>
+                {errors.bot_id && <p className="text-red-500 text-sm mt-1">{errors.bot_id.message}</p>}
               </div>
-            </form>
-          </div>
-        )}
+            )}
+            {selectedBotId && !editingId && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <p className="text-sm text-blue-800">
+                  <strong>Бот:</strong> {getBotName(selectedBotId)}
+                </p>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Название</label>
+              <input
+                {...register('name')}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="Например: VIP"
+              />
+              {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name.message}</p>}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Цвет</label>
+              <input
+                {...register('color')}
+                type="color"
+                className="h-10 w-full border border-gray-300 rounded-lg focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Описание (необязательно)</label>
+              <input
+                {...register('description')}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="Описание тега"
+              />
+            </div>
+
+            <div className="flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowForm(false)
+                  setEditingId(null)
+                  setEditingBotId(null)
+                  reset()
+                }}
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+              >
+                Отмена
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+              >
+                {editingId ? 'Сохранить' : 'Создать'}
+              </button>
+            </div>
+          </form>
+        </Modal>
 
         {/* Список тегов */}
         {isLoading ? (

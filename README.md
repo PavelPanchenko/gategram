@@ -1,18 +1,130 @@
-# GateGram
+# GateGram 🚀
 
-SaaS платформа для маршрутизации рекламного трафика через Telegram ботов с защитой каналов от банов и жалоб.
+> Профессиональная SaaS платформа для управления Telegram ботами, автоматизации рассылок и отслеживания трафика
+
+[![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-green.svg)](https://fastapi.tiangolo.com/)
+[![Next.js](https://img.shields.io/badge/Next.js-14+-black.svg)](https://nextjs.org/)
+[![License](https://img.shields.io/badge/License-Proprietary-red.svg)](LICENSE)
+
+GateGram — это комплексная платформа для управления Telegram ботами с мощными инструментами автоматизации, аналитики и маршрутизации трафика.
+
+## ✨ Ключевые возможности
+
+- 🤖 **Управление множеством ботов** — создавайте и управляйте неограниченным количеством Telegram ботов
+- 📨 **Умные рассылки** — массовые рассылки с медиа, планированием и фильтрацией аудитории
+- ⚡ **Триггеры и автоматизация** — настраивайте автоматические действия на события пользователей
+- 🏷️ **Сегментация пользователей** — теги, фильтры и источники трафика для точного таргетинга
+- 📊 **Аналитика в реальном времени** — отслеживайте конверсии, активность и эффективность рассылок
+- 🔗 **Реферальные ссылки** — генерируйте уникальные ссылки и отслеживайте источники трафика
+- 📝 **Шаблоны сообщений** — создавайте переиспользуемые шаблоны с динамическими переменными
+- 🎨 **Современный UI** — адаптивный интерфейс с поддержкой мобильных устройств
 
 ## Описание
 
 GateGram — это комплексная платформа для управления Telegram ботами, которая позволяет:
 
-- **Управление ботами**: Создание, настройка и управление множеством Telegram ботов
-- **Рассылки**: Массовые рассылки сообщений с поддержкой медиа-файлов (фото, видео, аудио, документы)
-- **Триггеры**: Автоматические действия на основе событий (новые пользователи, неактивность и т.д.)
-- **Шаблоны сообщений**: Создание и использование шаблонов с переменными
-- **Теги пользователей**: Группировка и фильтрация пользователей по тегам
-- **Аналитика**: Отслеживание статистики по ботам, рассылкам и пользователям
-- **Фильтры рассылок**: Точная настройка целевой аудитории для рассылок
+### Основной функционал
+
+#### 1. Управление ботами
+- Создание и настройка множества Telegram ботов
+- Автоматический запуск/остановка ботов
+- Настройка приветственных сообщений с поддержкой переменных
+- Отслеживание статуса ботов (активен/неактивен)
+- Реферальные ссылки с отслеживанием источников трафика
+- Статистика по источникам (конверсия, активные пользователи)
+
+#### 2. Рассылки
+- **Массовые рассылки** с поддержкой медиа-файлов:
+  - Фото (одно или несколько)
+  - Видео
+  - Аудио
+  - Документы
+  - Медиа-группы (до 10 файлов)
+- **Планирование рассылок** на определенное время
+- **Фильтрация аудитории**:
+  - По статусу (активные/заблокированные)
+  - По тегам (включение/исключение)
+  - По источникам трафика
+- **Использование шаблонов** для рассылок
+- **Отслеживание прогресса** в реальном времени
+- **Статистика**: отправлено/не доставлено сообщений
+- Автоматическая очистка медиа-файлов после рассылки
+
+#### 3. Триггеры (Автоматизация)
+- **Типы событий**:
+  - Регистрация нового пользователя
+  - Неактивность пользователя (настраиваемый период: 1-4+ недели)
+  - Присоединение к каналу
+  - Отписка от канала
+- **Множественные действия** на одно событие:
+  - Отправка сообщения (текст или шаблон)
+  - Добавление тега
+  - Удаление тега
+- **Условия срабатывания**:
+  - Период неактивности (для триггера "неактивный пользователь")
+  - Источник трафика
+  - Наличие/отсутствие тегов
+
+#### 4. Шаблоны сообщений
+- Создание переиспользуемых шаблонов
+- **Поддержка переменных**:
+  - `{{ user_name }}` — имя пользователя
+  - `{{ user_id }}` — ID пользователя
+  - `{{ bot_name }}` — имя бота
+  - `{{ status }}` — статус пользователя
+- Использование в рассылках и триггерах
+- Группировка по ботам
+
+#### 5. Теги пользователей
+- Создание и управление тегами
+- Массовое назначение/снятие тегов
+- Фильтрация пользователей по тегам
+- Использование в рассылках и триггерах
+- Визуальное отображение тегов в интерфейсе
+
+#### 6. Управление пользователями
+- **Единая страница** для всех пользователей
+- **Фильтрация**:
+  - По ботам
+  - По статусу (активные/заблокированные/покинувшие)
+  - По источникам трафика
+  - По тегам
+- **Действия**:
+  - Блокировка/разблокировка
+  - Отправка индивидуальных сообщений
+  - Управление тегами
+- **Адаптивный интерфейс**:
+  - Карточки на мобильных устройствах
+  - Таблица на десктопе
+- Автоматическое обновление статуса при блокировке бота пользователем
+
+#### 7. Аналитика и статистика
+- **Dashboard** с ключевыми метриками:
+  - Общее количество пользователей
+  - Активные пользователи
+  - Количество рассылок
+  - Успешность рассылок
+- **График новых пользователей** (последние 30 дней)
+- **Воронка конверсий**:
+  - Зарегистрировались
+  - Получили приветственное сообщение
+  - Остались активными
+- **Статистика по источникам трафика**:
+  - Количество пользователей
+  - Конверсия
+  - Активность
+- **Статистика по рассылкам**:
+  - Отправлено/не доставлено
+  - Прогресс в реальном времени
+
+#### 8. Безопасность и мониторинг
+- JWT аутентификация с refresh токенами
+- Хеширование паролей (bcrypt)
+- CORS защита
+- Health check endpoints для мониторинга
+- Структурированное логирование
+- Автоматическое обновление статуса пользователей
 
 ## Архитектура
 
@@ -179,13 +291,13 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 
 ```bash
 # Frontend .env.local
-NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_API_URL=http://localhost:8001
 ```
 
 4. **Запустите все сервисы:**
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 Эта команда запустит:
@@ -199,30 +311,32 @@ docker-compose up -d
 5. **Примените миграции базы данных:**
 
 ```bash
-docker-compose exec backend alembic upgrade head
+docker compose exec backend alembic upgrade head
 ```
 
 6. **Проверьте статус сервисов:**
 
 ```bash
-docker-compose ps
+docker compose ps
 ```
 
 Все сервисы должны быть в статусе `Up`.
 
 7. **Откройте в браузере:**
 
-- **Frontend**: http://localhost:3000
-- **Backend API**: http://localhost:8000
-- **API Документация (Swagger)**: http://localhost:8000/docs
-- **API Документация (ReDoc)**: http://localhost:8000/redoc
+- **Frontend**: http://localhost:3001
+- **Backend API**: http://localhost:8001
+- **API Документация (Swagger)**: http://localhost:8001/docs
+- **API Документация (ReDoc)**: http://localhost:8001/redoc
+
+> **Примечание**: Используются порты 3001 и 8001 для избежания конфликтов с другими приложениями на сервере.
 
 8. **Создайте первого пользователя:**
 
 Используйте API для регистрации или создайте через Python:
 
 ```bash
-docker-compose exec backend python -c "
+docker compose exec backend python -c "
 from app.core.database import SessionLocal
 from app.models.user import User
 from app.utils.password import get_password_hash
@@ -261,7 +375,7 @@ pip install -r requirements.txt
 DATABASE_URL=postgresql://gategram:gategram@localhost:5432/gategram
 REDIS_URL=redis://localhost:6379/0
 SECRET_KEY=your-secret-key-change-in-production-min-32-characters
-CORS_ORIGINS=http://localhost:3000,http://localhost:3001
+CORS_ORIGINS=http://localhost:3001
 ```
 
 3. **Убедитесь, что PostgreSQL и Redis запущены:**
@@ -280,7 +394,7 @@ alembic upgrade head
 5. **Запустите сервер:**
 
 ```bash
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
 ```
 
 6. **В отдельном терминале запустите Celery Worker:**
@@ -307,7 +421,7 @@ npm install
 2. **Создайте файл `.env.local`:**
 
 ```bash
-NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_API_URL=http://localhost:8001
 ```
 
 3. **Запустите dev сервер:**
@@ -316,7 +430,7 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 npm run dev
 ```
 
-Frontend будет доступен на http://localhost:3000
+Frontend будет доступен на http://localhost:3001
 
 ## Переменные окружения
 
@@ -327,7 +441,7 @@ Frontend будет доступен на http://localhost:3000
 | `DATABASE_URL` | PostgreSQL connection string | `postgresql://gategram:gategram@postgres:5432/gategram` | Да |
 | `REDIS_URL` | Redis connection string | `redis://redis:6379/0` | Да |
 | `SECRET_KEY` | Секретный ключ для JWT (минимум 32 символа) | - | Да |
-| `CORS_ORIGINS` | Разрешенные origins для CORS (через запятую) | `http://localhost:3000,http://localhost:3001` | Нет |
+| `CORS_ORIGINS` | Разрешенные origins для CORS (через запятую) | `http://localhost:3001` | Нет |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | Время жизни access token (минуты) | `30` | Нет |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | Время жизни refresh token (дни) | `7` | Нет |
 | `DEBUG` | Режим отладки | `False` | Нет |
@@ -375,8 +489,8 @@ Frontend будет доступен на http://localhost:3000
 
 API использует REST архитектуру и JWT аутентификацию. Полная документация доступна после запуска бэкенда:
 
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
+- **Swagger UI**: http://localhost:8001/docs
+- **ReDoc**: http://localhost:8001/redoc
 
 ### Основные группы эндпоинтов
 
@@ -388,8 +502,32 @@ API использует REST архитектуру и JWT аутентифик
 - **`/api/user-tags`** — Теги пользователей
 - **`/api/triggers`** — Триггеры
 - **`/api/global-*`** — Глобальные ресурсы (шаблоны, теги, триггеры, пользователи)
+- **`/health`** — Мониторинг и health checks
 
-Все эндпоинты (кроме `/api/auth/login` и `/api/auth/register`) требуют аутентификации через JWT токен.
+### Health Check и мониторинг
+
+Для проверки состояния приложения доступны следующие эндпоинты:
+
+```bash
+# Полная проверка здоровья (БД, Redis)
+GET /health
+
+# Быстрая проверка доступности
+GET /health/ping
+```
+
+Пример ответа `/health`:
+```json
+{
+  "status": "healthy",
+  "timestamp": "2026-01-10T12:00:00",
+  "database": "ok",
+  "redis": "ok",
+  "version": "1.0.0"
+}
+```
+
+Все эндпоинты (кроме `/api/auth/login`, `/api/auth/register` и `/health/*`) требуют аутентификации через JWT токен.
 
 ## Фоновые задачи (Celery)
 
@@ -403,12 +541,15 @@ API использует REST архитектуру и JWT аутентифик
 
 ### Задачи триггеров
 
-- **`check_inactive_users_task`** — Проверка неактивных пользователей (запускается каждый час)
+- **`check_inactive_users_task`** — Проверка неактивных пользователей (запускается каждый день в 10:00 UTC)
+  - Проверяет пользователей для каждого активного триггера типа "user_inactive"
+  - Период неактивности настраивается индивидуально для каждого триггера (7, 14, 30 или 90 дней)
 - **`process_trigger_task`** — Обработка триггера
 
 ### Планировщик (Celery Beat)
 
-- **`check-inactive-users`** — Каждый час проверяет неактивных пользователей
+- **`check-inactive-users`** — Каждый день в 10:00 UTC проверяет неактивных пользователей
+- **`check-scheduled-broadcasts`** — Каждую минуту проверяет запланированные рассылки
 - **`cleanup-old-media-files`** — Каждый день в 2:00 UTC удаляет старые медиа-файлы (старше 30 дней)
 
 ## Разработка
@@ -417,13 +558,13 @@ API использует REST архитектуру и JWT аутентифик
 
 ```bash
 # Создать новую миграцию
-docker-compose exec backend alembic revision --autogenerate -m "описание изменений"
+docker compose exec backend alembic revision --autogenerate -m "описание изменений"
 
 # Применить миграции
-docker-compose exec backend alembic upgrade head
+docker compose exec backend alembic upgrade head
 
 # Откатить последнюю миграцию
-docker-compose exec backend alembic downgrade -1
+docker compose exec backend alembic downgrade -1
 ```
 
 ### Логи
@@ -431,51 +572,111 @@ docker-compose exec backend alembic downgrade -1
 Просмотр логов всех сервисов:
 
 ```bash
-docker-compose logs -f
+docker compose logs -f
 ```
 
 Логи конкретного сервиса:
 
 ```bash
-docker-compose logs -f backend
-docker-compose logs -f celery
-docker-compose logs -f celery-beat
+docker compose logs -f backend
+docker compose logs -f celery
+docker compose logs -f celery-beat
 ```
 
 ### Остановка сервисов
 
 ```bash
 # Остановить все сервисы
-docker-compose down
+docker compose down
 
 # Остановить и удалить volumes (удалит данные БД!)
-docker-compose down -v
+docker compose down -v
 ```
 
 ### Пересборка образов
 
 ```bash
 # Пересобрать все образы
-docker-compose build
+docker compose build
 
 # Пересобрать конкретный сервис
-docker-compose build backend
+docker compose build backend
 
 # Пересобрать и перезапустить
-docker-compose up -d --build
+docker compose up -d --build
 ```
+
+## Production Deployment
+
+### Подготовка к продакшену
+
+1. **Создайте production переменные окружения:**
+
+```bash
+# .env.production
+DATABASE_URL=postgresql://user:strong_password@your-db-host:5432/gategram
+REDIS_URL=redis://your-redis-host:6379/0
+SECRET_KEY=very-long-random-string-at-least-32-characters
+CORS_ORIGINS=https://yourdomain.com
+DEBUG=false
+LOG_LEVEL=WARNING
+```
+
+2. **Используйте HTTPS:**
+   - Настройте SSL сертификаты (Let's Encrypt рекомендуется)
+   - Используйте nginx как reverse proxy
+
+3. **Настройте мониторинг:**
+
+```bash
+# Проверка здоровья приложения
+curl https://yourdomain.com/health
+
+# Настройте автоматические проверки (например, через cron)
+*/5 * * * * curl -f https://yourdomain.com/health/ping || alert
+```
+
+4. **Настройте backup базы данных:**
+
+```bash
+# Ежедневный backup PostgreSQL
+0 2 * * * docker compose exec -T postgres pg_dump -U gategram gategram > backup_$(date +\%Y\%m\%d).sql
+```
+
+5. **Логирование:**
+   - Логи автоматически пишутся в stdout/stderr
+   - Используйте `docker compose logs` для просмотра
+   - Настройте ротацию логов в Docker
+
+6. **Масштабирование:**
+
+```bash
+# Увеличить количество Celery workers
+docker compose up -d --scale celery=3
+```
+
+### Рекомендации по безопасности
+
+- Используйте сильные пароли для БД и Redis
+- Регулярно обновляйте зависимости
+- Ограничьте доступ к портам БД и Redis (только localhost)
+- Настройте firewall
+- Используйте Docker secrets для чувствительных данных
 
 ## Безопасность
 
 ### Реализованные меры
 
 - ✅ Все пароли хешируются с использованием bcrypt
-- ✅ JWT токены с настраиваемым временем жизни
+- ✅ JWT токены с настраиваемым временем жизни (access + refresh)
 - ✅ CORS настроен для разрешенных origins
 - ✅ Соблюдение лимитов Telegram API (30 сообщений/сек)
 - ✅ Rate limiting для рассылок
 - ✅ Валидация всех входных данных через Pydantic
 - ✅ Защита от SQL инъекций через SQLAlchemy ORM
+- ✅ Health check endpoints для мониторинга
+- ✅ Структурированное логирование
+- ✅ Автоматическое обновление статуса пользователей при блокировке бота
 - ✅ Безопасная обработка загружаемых файлов
 
 ### Рекомендации для production
@@ -496,56 +697,56 @@ docker-compose up -d --build
 
 ```bash
 # Проверьте статус PostgreSQL
-docker-compose ps postgres
+docker compose ps postgres
 
 # Проверьте логи
-docker-compose logs postgres
+docker compose logs postgres
 
 # Проверьте подключение
-docker-compose exec backend python -c "from app.core.database import engine; engine.connect()"
+docker compose exec backend python -c "from app.core.database import engine; engine.connect()"
 ```
 
 ### Проблема: Redis не подключается
 
 ```bash
 # Проверьте статус Redis
-docker-compose ps redis
+docker compose ps redis
 
 # Проверьте подключение
-docker-compose exec redis redis-cli ping
+docker compose exec redis redis-cli ping
 ```
 
 ### Проблема: Миграции не применяются
 
 ```bash
 # Проверьте текущую версию
-docker-compose exec backend alembic current
+docker compose exec backend alembic current
 
 # Просмотрите историю миграций
-docker-compose exec backend alembic history
+docker compose exec backend alembic history
 
 # Примените миграции вручную
-docker-compose exec backend alembic upgrade head
+docker compose exec backend alembic upgrade head
 ```
 
 ### Проблема: Celery задачи не выполняются
 
 ```bash
 # Проверьте статус Celery Worker
-docker-compose ps celery
+docker compose ps celery
 
 # Проверьте логи
-docker-compose logs -f celery
+docker compose logs -f celery
 
 # Проверьте подключение к Redis
-docker-compose exec celery python -c "from app.core.config import settings; import redis; r = redis.from_url(settings.REDIS_URL); r.ping()"
+docker compose exec celery python -c "from app.core.config import settings; import redis; r = redis.from_url(settings.REDIS_URL); r.ping()"
 ```
 
 ### Проблема: Боты не запускаются
 
 ```bash
 # Проверьте логи бэкенда
-docker-compose logs -f backend
+docker compose logs -f backend
 
 # Проверьте, что токены ботов валидны
 # Проверьте, что боты активны в БД
@@ -555,20 +756,55 @@ docker-compose logs -f backend
 
 ```bash
 # Проверьте права доступа к папке media
-docker-compose exec backend ls -la /app/media/broadcasts
+docker compose exec backend ls -la /app/media/broadcasts
 
 # Проверьте, что папка существует
-docker-compose exec backend mkdir -p /app/media/broadcasts
+docker compose exec backend mkdir -p /app/media/broadcasts
 ```
 
 ## Производительность
 
-### Рекомендации
+### Рекомендации по оптимизации
 
-- **Рассылки**: Используются батчи по 30 сообщений с задержкой 1 секунда между батчами
-- **БД**: Настройте connection pooling в `DATABASE_URL` (например, `?pool_size=10`)
-- **Redis**: Используйте для кэширования часто запрашиваемых данных
-- **Медиа файлы**: Рассмотрите использование S3 или другого object storage для production
+1. **Рассылки:**
+   - Используются батчи по 30 сообщений с задержкой 1 секунда между батчами
+   - Автоматическое соблюдение лимитов Telegram API
+   - Параллельная обработка через Celery workers
+   - Масштабирование: увеличьте количество workers для больших рассылок
+
+2. **База данных:**
+   - Настройте connection pooling: `?pool_size=10&max_overflow=20`
+   - Используйте индексы (уже настроены для основных полей)
+   - Регулярно запускайте `VACUUM ANALYZE` для PostgreSQL
+   - Мониторьте медленные запросы
+
+3. **Redis:**
+   - Используется для очередей Celery
+   - Можно использовать для кэширования часто запрашиваемых данных
+   - Настройте `maxmemory-policy` для production
+
+4. **Медиа файлы:**
+   - Автоматическая очистка старых файлов (Celery Beat задача)
+   - Для production рассмотрите S3/MinIO для хранения
+   - Настройте CDN для быстрой доставки
+
+5. **Мониторинг производительности:**
+   ```bash
+   # Проверка здоровья системы
+   curl http://localhost:8001/health
+   
+   # Мониторинг Celery
+   celery -A app.celery_app inspect active
+   celery -A app.celery_app inspect stats
+   ```
+
+6. **Масштабирование:**
+   ```bash
+   # Горизонтальное масштабирование Celery workers
+   docker compose up -d --scale celery=5
+   
+   # Для очень больших нагрузок используйте отдельные workers для разных задач
+   ```
 
 ## Лицензия
 

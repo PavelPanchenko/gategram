@@ -27,6 +27,10 @@ export function useAuth() {
         window.location.href = '/dashboard'
       }
     },
+    onError: (error: Error) => {
+      // Ошибка уже обработана в api.login, просто пробрасываем
+      console.error('Login error:', error)
+    },
   })
 
   const registerMutation = useMutation({
@@ -35,6 +39,10 @@ export function useAuth() {
     onSuccess: (_, variables) => {
       // После регистрации автоматически логинимся
       loginMutation.mutate(variables)
+    },
+    onError: (error: Error) => {
+      // Ошибка уже обработана в api.register, просто пробрасываем
+      console.error('Register error:', error)
     },
   })
 

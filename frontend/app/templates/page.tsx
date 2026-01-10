@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import DashboardLayout from '@/app/components/DashboardLayout'
+import Modal from '@/app/components/Modal'
 import { useAllTemplates } from '@/app/hooks/useTemplates'
 import { useBots } from '@/app/hooks/useBots'
 import { useCreateTemplate, useUpdateTemplate, useDeleteTemplate } from '@/app/hooks/useTemplates'
@@ -9,13 +10,12 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { showToast, confirmAction } from '@/app/utils/toast'
-import { FileText, Info, Pause, Play, Edit2, Trash2, Plus, Bot } from 'lucide-react'
+import { FileText, Info, Edit2, Trash2, Plus, Bot } from 'lucide-react'
 import Link from 'next/link'
 
 const templateSchema = z.object({
   name: z.string().min(1, 'Название обязательно'),
   content: z.string().min(1, 'Содержимое обязательно'),
-  is_active: z.boolean().default(true),
   bot_id: z.string().optional(),
 })
 
@@ -24,14 +24,13 @@ type TemplateFormData = z.infer<typeof templateSchema>
 export default function TemplatesPage() {
   const [selectedBotId, setSelectedBotId] = useState<number | undefined>(undefined)
   const [editingId, setEditingId] = useState<number | null>(null)
-  const [editingBotId, setEditingBotId] = useState<number | null>(null)
   const [showForm, setShowForm] = useState(false)
 
   const { data: bots } = useBots()
   const { data: templates, isLoading } = useAllTemplates(selectedBotId)
-  const createTemplate = useCreateTemplate(editingBotId || 0)
-  const updateTemplate = useUpdateTemplate(editingBotId || 0)
-  const deleteTemplate = useDeleteTemplate(editingBotId || 0)
+  const createTemplate = useCreateTemplate()
+  const updateTemplate = useUpdateTemplate()
+  const deleteTemplate = useDeleteTemplate()
 
   const {
     register,
@@ -42,7 +41,6 @@ export default function TemplatesPage() {
   } = useForm<TemplateFormData>({
     resolver: zodResolver(templateSchema),
     defaultValues: {
-      is_active: true,
       bot_id: '',
     },
   })
@@ -56,15 +54,20 @@ export default function TemplatesPage() {
       showToast.error('Выберите бота')
       return
     }
-    setEditingBotId(botId)
     
     try {
       if (editingId) {
-        await updateTemplate.mutateAsync({ templateId: editingId, data: { name: data.name, content: data.content, is_active: data.is_active } })
+        await updateTemplate.mutateAsync({ 
+          botId, 
+          templateId: editingId, 
+          data: { name: data.name, content: data.content } 
+        })
         setEditingId(null)
-        setEditingBotId(null)
       } else {
-        await createTemplate.mutateAsync({ name: data.name, content: data.content, is_active: data.is_active })
+        await createTemplate.mutateAsync({ 
+          botId, 
+          data: { name: data.name, content: data.content } 
+        })
       }
       reset()
       setShowForm(false)
@@ -80,7 +83,6 @@ export default function TemplatesPage() {
     reset({
       name: template.name,
       content: template.content,
-      is_active: template.is_active,
       bot_id: template.bot_id.toString(),
     })
     setShowForm(true)
@@ -90,14 +92,11 @@ export default function TemplatesPage() {
     confirmAction(
       `Вы уверены, что хотите удалить шаблон "${template.name}"?`,
       async () => {
-        setEditingBotId(template.bot_id)
         try {
-          await deleteTemplate.mutateAsync(template.id)
+          await deleteTemplate.mutateAsync({ botId: template.bot_id, templateId: template.id })
           showToast.success('Шаблон удален')
         } catch (error: any) {
           showToast.error(error.message || 'Ошибка при удалении шаблона')
-        } finally {
-          setEditingBotId(null)
         }
       },
       undefined,
@@ -105,24 +104,6 @@ export default function TemplatesPage() {
     )
   }
 
-  const handleToggleActive = async (template: any) => {
-    setEditingBotId(template.bot_id)
-    try {
-      await updateTemplate.mutateAsync({
-        templateId: template.id,
-        data: {
-          name: template.name,
-          content: template.content,
-          is_active: !template.is_active,
-        },
-      })
-      showToast.success(template.is_active ? 'Шаблон деактивирован' : 'Шаблон активирован')
-    } catch (error: any) {
-      showToast.error(error.message || 'Ошибка при изменении статуса шаблона')
-    } finally {
-      setEditingBotId(null)
-    }
-  }
 
   const getBotName = (botId: number) => {
     const bot = bots?.find((b) => b.id === botId)
@@ -140,8 +121,7 @@ export default function TemplatesPage() {
           <button
             onClick={() => {
               setEditingId(null)
-              setEditingBotId(null)
-              reset({ name: '', content: '', is_active: true, bot_id: selectedBotId ? selectedBotId.toString() : '' })
+              reset({ name: '', content: '', bot_id: selectedBotId ? selectedBotId.toString() : '' })
               setShowForm(true)
             }}
             className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium transition-colors"
@@ -184,93 +164,91 @@ export default function TemplatesPage() {
           </div>
         </div>
 
-        {/* Форма создания/редактирования */}
-        {showForm && (
-          <div className="bg-white p-6 rounded-lg border border-gray-200">
-            <h2 className="text-xl font-semibold mb-4">{editingId ? 'Редактировать шаблон' : 'Создать шаблон'}</h2>
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-              {!selectedBotId && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Бот</label>
-                  <select
-                    {...register('bot_id')}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                    disabled={!!editingId}
-                  >
-                    <option value="">Выберите бота</option>
-                    {bots?.map((bot) => (
-                      <option key={bot.id} value={bot.id}>
-                        {bot.name || bot.username || `Bot #${bot.id}`}
-                      </option>
-                    ))}
-                  </select>
-                  {errors.bot_id && <p className="text-red-500 text-sm mt-1">{errors.bot_id.message}</p>}
-                </div>
-              )}
-              {selectedBotId && !editingId && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                  <p className="text-sm text-blue-800">
-                    <strong>Бот:</strong> {getBotName(selectedBotId)}
-                  </p>
-                </div>
-              )}
-
+        {/* Модальное окно создания/редактирования */}
+        <Modal
+          isOpen={showForm}
+          onClose={() => {
+            setShowForm(false)
+            setEditingId(null)
+            setEditingBotId(null)
+            reset()
+          }}
+          title={editingId ? 'Редактировать шаблон' : 'Создать шаблон'}
+          size="lg"
+        >
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            {!selectedBotId && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Название</label>
-                <input
-                  {...register('name')}
+                <label className="block text-sm font-medium text-gray-700 mb-1">Бот</label>
+                <select
+                  {...register('bot_id')}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                  placeholder="Например: welcome_message"
-                />
-                {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name.message}</p>}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Содержимое</label>
-                <textarea
-                  {...register('content')}
-                  rows={6}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                  placeholder="Текст шаблона с переменными {{user_name}}, {{source}} и т.д."
-                />
-                {errors.content && <p className="text-red-500 text-sm mt-1">{errors.content.message}</p>}
-              </div>
-
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="is_active"
-                  {...register('is_active')}
-                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                />
-                <label htmlFor="is_active" className="ml-2 block text-sm text-gray-700">
-                  Активен
-                </label>
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                  disabled={!!editingId}
                 >
-                  {editingId ? 'Сохранить' : 'Создать'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowForm(false)
-                    setEditingId(null)
-                    setEditingBotId(null)
-                    reset()
-                  }}
-                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
-                >
-                  Отмена
-                </button>
+                  <option value="">Выберите бота</option>
+                  {bots?.map((bot) => (
+                    <option key={bot.id} value={bot.id}>
+                      {bot.name || bot.username || `Bot #${bot.id}`}
+                    </option>
+                  ))}
+                </select>
+                {errors.bot_id && <p className="text-red-500 text-sm mt-1">{errors.bot_id.message}</p>}
               </div>
-            </form>
-          </div>
-        )}
+            )}
+            {selectedBotId && !editingId && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <p className="text-sm text-blue-800">
+                  <strong>Бот:</strong> {getBotName(selectedBotId)}
+                </p>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Название</label>
+              <input
+                {...register('name')}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="Например: welcome_message"
+              />
+              {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name.message}</p>}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Содержимое</label>
+              <textarea
+                {...register('content')}
+                rows={8}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="Текст шаблона с переменными {{user_name}}, {{source}} и т.д."
+              />
+              {errors.content && <p className="text-red-500 text-sm mt-1">{errors.content.message}</p>}
+              <p className="text-xs text-gray-500 mt-1">
+                Доступные переменные: {'{{ user_name }}'}, {'{{ user_first_name }}'}, {'{{ user_last_name }}'}, {'{{ user_username }}'}, {'{{ source }}'}
+              </p>
+            </div>
+
+            <div className="flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowForm(false)
+                  setEditingId(null)
+                  setEditingBotId(null)
+                  reset()
+                }}
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+              >
+                Отмена
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+              >
+                {editingId ? 'Сохранить' : 'Создать'}
+              </button>
+            </div>
+          </form>
+        </Modal>
 
         {/* Список шаблонов */}
         {isLoading ? (
@@ -283,11 +261,6 @@ export default function TemplatesPage() {
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
                       <h3 className="text-lg font-semibold text-gray-900">{template.name}</h3>
-                      {template.is_active ? (
-                        <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full font-medium">Активен</span>
-                      ) : (
-                        <span className="px-2 py-1 bg-gray-100 text-gray-800 text-xs rounded-full font-medium">Неактивен</span>
-                      )}
                     </div>
                     <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
                       <Bot size={14} />
@@ -301,17 +274,6 @@ export default function TemplatesPage() {
                     </p>
                   </div>
                   <div className="flex gap-2 ml-4">
-                    <button
-                      onClick={() => handleToggleActive(template)}
-                      className={`p-2 rounded-lg transition-colors ${
-                        template.is_active
-                          ? 'bg-yellow-50 text-yellow-600 hover:bg-yellow-100'
-                          : 'bg-green-50 text-green-600 hover:bg-green-100'
-                      }`}
-                      title={template.is_active ? 'Деактивировать' : 'Активировать'}
-                    >
-                      {template.is_active ? <Pause size={16} /> : <Play size={16} />}
-                    </button>
                     <button
                       onClick={() => handleEdit(template)}
                       className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"

@@ -9,8 +9,9 @@ import DashboardLayout from '@/app/components/DashboardLayout'
 import { useBots } from '@/app/hooks/useBots'
 import { useCreateBroadcast } from '@/app/hooks/useBroadcasts'
 import { useAllTemplates } from '@/app/hooks/useTemplates'
+import { useTags } from '@/app/hooks/useTags'
 import { BroadcastFilters } from '@/app/lib/api'
-import { Info, AlertCircle, ChevronDown, ChevronUp, Filter, FileText, X } from 'lucide-react'
+import { Info, AlertCircle, ChevronDown, ChevronUp, Filter, FileText, X, Tag } from 'lucide-react'
 
 const broadcastSchema = z.object({
   bot_id: z.string().min(1, 'Выберите бота'),
@@ -54,6 +55,7 @@ export default function NewBroadcastPage() {
   const selectedBotId = watch('bot_id')
   const selectedTemplateId = watch('template_id')
   const { data: templates } = useAllTemplates(selectedBotId ? Number(selectedBotId) : undefined)
+  const { data: tags } = useTags(selectedBotId ? Number(selectedBotId) : undefined)
 
   const getMediaType = (file: File): string | null => {
     const ext = file.name.split('.').pop()?.toLowerCase()
@@ -113,12 +115,29 @@ export default function NewBroadcastPage() {
         media_type: mediaType,
         media_file: data.media_file || null,
         media_files: data.media_files && data.media_files.length > 0 ? data.media_files : null,
-        scheduled_at: data.scheduled_at || null,
+        scheduled_at: data.scheduled_at 
+          ? (() => {
+              try {
+                // datetime-local возвращает формат YYYY-MM-DDTHH:mm без таймзоны
+                // Интерпретируем как локальное время и конвертируем в UTC
+                const localDate = new Date(data.scheduled_at)
+                // Проверяем, что дата валидна
+                if (isNaN(localDate.getTime())) {
+                  return null
+                }
+                // Конвертируем в ISO формат (UTC)
+                const isoString = localDate.toISOString()
+                return isoString
+              } catch (error) {
+                return null
+              }
+            })()
+          : null,
         filters: Object.keys(cleanFilters).length > 0 ? cleanFilters : null,
       })
       router.push('/broadcasts')
-    } catch (error) {
-      console.error('Error creating broadcast:', error)
+    } catch (error: any) {
+      showToast.error(error.message || 'Ошибка при создании рассылки')
     }
   }
 
@@ -188,7 +207,7 @@ export default function NewBroadcastPage() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                   >
                     <option value="">Не использовать шаблон</option>
-                    {templates.filter(t => t.is_active).map((template) => (
+                    {templates.map((template) => (
                       <option key={template.id} value={template.id}>
                         {template.name}
                       </option>
@@ -374,6 +393,67 @@ export default function NewBroadcastPage() {
                     <p className="mt-1 text-xs text-gray-500">Фильтр по источнику трафика</p>
                   </div>
                 </div>
+
+                {/* Фильтр по тегам */}
+                {selectedBotId && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <Tag size={14} className="inline mr-1" />
+                      Теги пользователей
+                    </label>
+                    {tags && tags.length > 0 ? (
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {tags.map((tag) => {
+                            const isSelected = filters.tags?.includes(tag.name) || false
+                            return (
+                              <label
+                                key={tag.id}
+                                className="flex items-center gap-2 p-2 rounded-lg border cursor-pointer hover:bg-gray-50 transition-colors"
+                                style={{
+                                  borderColor: isSelected ? tag.color : '#e5e7eb',
+                                  backgroundColor: isSelected ? `${tag.color}10` : 'white',
+                                }}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={(e) => {
+                                    const currentTags = filters.tags || []
+                                    if (e.target.checked) {
+                                      setFilters({ ...filters, tags: [...currentTags, tag.name] })
+                                    } else {
+                                      setFilters({ ...filters, tags: currentTags.filter(t => t !== tag.name) })
+                                    }
+                                  }}
+                                  className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                />
+                                <div
+                                  className="w-3 h-3 rounded-full flex-shrink-0"
+                                  style={{ backgroundColor: tag.color }}
+                                />
+                                <span className="text-sm font-medium truncate">{tag.name}</span>
+                              </label>
+                            )
+                          })}
+                        </div>
+                        <p className="text-xs text-gray-500">
+                          Рассылка будет отправлена только пользователям, у которых есть <strong>все</strong> выбранные теги
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="p-3 bg-gray-50 border border-gray-200 rounded-md">
+                        <p className="text-sm text-gray-600">
+                          Нет доступных тегов для этого бота. Создайте теги на странице{' '}
+                          <a href="/tags" className="text-indigo-600 hover:text-indigo-800 underline">
+                            Теги
+                          </a>
+                          .
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
                 
                 <div className="p-3 bg-blue-50 border border-blue-200 rounded-md space-y-2">
                   <div className="flex gap-2">

@@ -1,12 +1,16 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import DashboardLayout from '@/app/components/DashboardLayout'
-import { api, TelegramUser, Bot } from '@/app/lib/api'
+import { api, TelegramUser } from '@/app/lib/api'
 import { showToast, confirmAction } from '@/app/utils/toast'
 import Link from 'next/link'
-import { MessageCircle, Lock, Unlock, Loader2, X, Image, Video, Music, File, Users, Bot as BotIcon } from 'lucide-react'
+import { MessageCircle, Lock, Unlock, Loader2, X, Image, Video, Music, File, Users, Bot as BotIcon, Tag } from 'lucide-react'
 import { useBots } from '@/app/hooks/useBots'
+import { useTags } from '@/app/hooks/useTags'
+import { useAssignTagsToUser } from '@/app/hooks/useTags'
+import { useAllUsers, useBlockUser, useSendMessageToUser } from '@/app/hooks/useUsers'
 // Tooltip component removed - using title attribute instead
 
 function getUserDisplayName(user: TelegramUser) {
@@ -21,18 +25,21 @@ function getUserDisplayName(user: TelegramUser) {
 
 function UserActions({
   user,
-  onAction,
 }: {
   user: TelegramUser
-  onAction: () => void
 }) {
   const [showMessageModal, setShowMessageModal] = useState(false)
+  const [showTagsModal, setShowTagsModal] = useState(false)
   const [messageText, setMessageText] = useState('')
   const [mediaFile, setMediaFile] = useState<File | null>(null)
   const [mediaPreview, setMediaPreview] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [blockLoading, setBlockLoading] = useState(false)
+  const [selectedTagIds, setSelectedTagIds] = useState<number[]>([])
+  
+  const { data: tags } = useTags(user.bot_id)
+  const assignTagsMutation = useAssignTagsToUser()
+  const sendMessageMutation = useSendMessageToUser()
+  const blockUserMutation = useBlockUser()
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -64,23 +71,45 @@ function UserActions({
       return
     }
 
-    setLoading(true)
     setError('')
 
     try {
       const mediaType = mediaFile ? getMediaType(mediaFile) : null
-      await api.sendMessageToUser(user.bot_id, user.id, messageText || '', mediaFile, mediaType)
+      await sendMessageMutation.mutateAsync({
+        botId: user.bot_id,
+        userId: user.id,
+        messageText: messageText || '',
+        mediaFile,
+        mediaType,
+      })
       setShowMessageModal(false)
       setMessageText('')
       setMediaFile(null)
       setMediaPreview(null)
-      onAction()
       showToast.success('Сообщение отправлено успешно')
     } catch (err: any) {
       setError(err.message || 'Ошибка при отправке сообщения')
       showToast.error(err.message || 'Ошибка при отправке сообщения')
-    } finally {
-      setLoading(false)
+    }
+  }
+
+  const handleOpenTagsModal = () => {
+    // Инициализируем выбранные теги текущими тегами пользователя
+    setSelectedTagIds(user.tags?.map(tag => tag.id) || [])
+    setShowTagsModal(true)
+  }
+
+  const handleSaveTags = async () => {
+    try {
+      await assignTagsMutation.mutateAsync({
+        botId: user.bot_id,
+        userId: user.id,
+        tagIds: selectedTagIds,
+      })
+      setShowTagsModal(false)
+      showToast.success('Теги обновлены')
+    } catch (err: any) {
+      showToast.error(err.message || 'Ошибка при обновлении тегов')
     }
   }
 
@@ -89,16 +118,15 @@ function UserActions({
     confirmAction(
       `Вы уверены, что хотите ${action} пользователя ${getUserDisplayName(user)}?`,
       async () => {
-        setBlockLoading(true)
         try {
-          const updatedUser = await api.blockUser(user.bot_id, user.id, user.status !== 'blocked')
-          user.status = updatedUser.status
-          onAction()
+          await blockUserMutation.mutateAsync({
+            botId: user.bot_id,
+            userId: user.id,
+            blocked: user.status !== 'blocked',
+          })
           showToast.success(`Пользователь ${action === 'заблокировать' ? 'заблокирован' : 'разблокирован'}`)
         } catch (err: any) {
           showToast.error(err.message || 'Ошибка при изменении статуса пользователя')
-        } finally {
-          setBlockLoading(false)
         }
       }
     )
@@ -107,6 +135,13 @@ function UserActions({
   return (
     <>
       <div className="flex gap-2">
+        <button
+          onClick={handleOpenTagsModal}
+          className="p-2 bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100 transition-colors"
+          title="Управление тегами"
+        >
+          <Tag size={16} />
+        </button>
         <button
           onClick={() => setShowMessageModal(true)}
           disabled={user.status === 'blocked'}
@@ -117,7 +152,7 @@ function UserActions({
         </button>
         <button
           onClick={handleBlock}
-          disabled={blockLoading}
+          disabled={blockUserMutation.isPending}
           title={user.status === 'blocked' ? 'Разблокировать пользователя' : 'Заблокировать пользователя'}
           className={`p-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
             user.status === 'blocked'
@@ -125,7 +160,7 @@ function UserActions({
               : 'bg-yellow-50 text-yellow-600 hover:bg-yellow-100'
           }`}
         >
-          {blockLoading ? <Loader2 size={16} className="animate-spin" /> : user.status === 'blocked' ? <Unlock size={16} /> : <Lock size={16} />}
+          {blockUserMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : user.status === 'blocked' ? <Unlock size={16} /> : <Lock size={16} />}
         </button>
       </div>
 
@@ -192,10 +227,10 @@ function UserActions({
             <div className="flex gap-2">
               <button
                 onClick={handleSendMessage}
-                disabled={loading}
+                disabled={sendMessageMutation.isPending}
                 className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50"
               >
-                {loading ? 'Отправка...' : 'Отправить'}
+                {sendMessageMutation.isPending ? 'Отправка...' : 'Отправить'}
               </button>
               <button
                 onClick={() => {
@@ -213,45 +248,118 @@ function UserActions({
           </div>
         </div>
       )}
+
+      {showTagsModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-[80vh] overflow-y-auto">
+            <h3 className="text-lg font-bold mb-4">
+              Управление тегами для {getUserDisplayName(user)}
+            </h3>
+            
+            {tags && tags.length > 0 ? (
+              <div className="space-y-2 mb-4">
+                {tags.map((tag) => {
+                  const isSelected = selectedTagIds.includes(tag.id)
+                  return (
+                    <label
+                      key={tag.id}
+                      className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-gray-50 transition-colors"
+                      style={{
+                        borderColor: isSelected ? tag.color : '#e5e7eb',
+                        backgroundColor: isSelected ? `${tag.color}10` : 'white',
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedTagIds([...selectedTagIds, tag.id])
+                          } else {
+                            setSelectedTagIds(selectedTagIds.filter(id => id !== tag.id))
+                          }
+                        }}
+                        className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <div
+                        className="w-4 h-4 rounded-full"
+                        style={{ backgroundColor: tag.color }}
+                      />
+                      <div className="flex-1">
+                        <div className="font-medium">{tag.name}</div>
+                        {tag.description && (
+                          <div className="text-sm text-gray-500">{tag.description}</div>
+                        )}
+                      </div>
+                    </label>
+                  )
+                })}
+              </div>
+            ) : (
+              <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-3 rounded mb-4">
+                Нет доступных тегов. Создайте теги в разделе{' '}
+                <Link href="/tags" className="underline font-semibold">
+                  Теги
+                </Link>
+                .
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <button
+                onClick={handleSaveTags}
+                disabled={assignTagsMutation.isPending}
+                className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {assignTagsMutation.isPending ? 'Сохранение...' : 'Сохранить'}
+              </button>
+              <button
+                onClick={() => {
+                  setShowTagsModal(false)
+                  setSelectedTagIds([])
+                }}
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+              >
+                Отмена
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }
 
 export default function UsersPage() {
-  const [users, setUsers] = useState<TelegramUser[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
   const [selectedBotId, setSelectedBotId] = useState<number | undefined>(undefined)
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [sourceFilter, setSourceFilter] = useState<string>('')
-  const [sources, setSources] = useState<string[]>([])
+  const router = useRouter()
 
   const { data: bots } = useBots()
+  const { data: users = [], isLoading: loading, error: queryError } = useAllUsers(
+    selectedBotId,
+    statusFilter || undefined,
+    sourceFilter || undefined
+  )
 
+  const error = queryError ? (queryError as Error).message : ''
+
+  // Собираем уникальные источники
+  const sources = Array.from(new Set(users.map((u) => u.source).filter(Boolean))) as string[]
+
+  // Инициализация bot_id из query параметров
   useEffect(() => {
-    loadData()
-  }, [selectedBotId, statusFilter, sourceFilter])
-
-  const loadData = async () => {
-    try {
-      setLoading(true)
-      const usersData = await api.getAllUsers(
-        selectedBotId,
-        statusFilter || undefined,
-        sourceFilter || undefined
-      )
-      setUsers(usersData)
-      
-      // Собираем уникальные источники
-      const uniqueSources = Array.from(new Set(usersData.map((u) => u.source).filter(Boolean))) as string[]
-      setSources(uniqueSources)
-    } catch (err: any) {
-      setError(err.message || 'Ошибка загрузки данных')
-      showToast.error(err.message || 'Ошибка загрузки пользователей')
-    } finally {
-      setLoading(false)
+    if (typeof window !== 'undefined') {
+      const searchParams = new URLSearchParams(window.location.search)
+      if (searchParams.has('bot_id')) {
+        const botIdFromUrl = parseInt(searchParams.get('bot_id') || '0')
+        if (botIdFromUrl && !selectedBotId) {
+          setSelectedBotId(botIdFromUrl)
+        }
+      }
     }
-  }
+  }, [])
 
   const getStatusBadge = (status: string) => {
     const colors: Record<string, string> = {
@@ -283,22 +391,52 @@ export default function UsersPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Пользователи</h1>
-            <p className="text-gray-500 mt-1">Управление пользователями всех ботов</p>
+      <div className="space-y-4 sm:space-y-6 -mx-4 sm:mx-0 px-4 sm:px-0">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+          <div className="flex-1">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+              {selectedBotId 
+                ? `Пользователи бота: ${bots?.find(b => b.id === selectedBotId)?.name || bots?.find(b => b.id === selectedBotId)?.username || `Bot #${selectedBotId}`}`
+                : 'Пользователи'
+              }
+            </h1>
+            <p className="text-gray-500 mt-1 text-sm sm:text-base">
+              {selectedBotId 
+                ? 'Управление пользователями выбранного бота'
+                : 'Управление пользователями всех ботов'
+              }
+            </p>
           </div>
+          {selectedBotId && (
+            <button
+              onClick={() => {
+                setSelectedBotId(undefined)
+                router.push('/users')
+              }}
+              className="px-3 py-2 sm:px-4 sm:py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-xs sm:text-sm font-medium transition-colors whitespace-nowrap"
+            >
+              Показать всех
+            </button>
+          )}
         </div>
 
         {/* Фильтры */}
-        <div className="bg-white p-4 rounded-lg border border-gray-200 flex gap-4">
-          <div className="flex-1">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Бот</label>
+        <div className="bg-white p-3 sm:p-4 rounded-lg border border-gray-200 flex flex-col sm:flex-row gap-3 sm:gap-4">
+          <div className="flex-1 min-w-0">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Бот</label>
             <select
               value={selectedBotId || ''}
-              onChange={(e) => setSelectedBotId(e.target.value ? parseInt(e.target.value) : undefined)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+              onChange={(e) => {
+                const botId = e.target.value ? parseInt(e.target.value) : undefined
+                setSelectedBotId(botId)
+                // Обновляем URL
+                if (botId) {
+                  router.push(`/users?bot_id=${botId}`)
+                } else {
+                  router.push('/users')
+                }
+              }}
+              className="w-full px-2 sm:px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
             >
               <option value="">Все боты</option>
               {bots?.map((bot) => (
@@ -308,12 +446,12 @@ export default function UsersPage() {
               ))}
             </select>
           </div>
-          <div className="flex-1">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Статус</label>
+          <div className="flex-1 min-w-0">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Статус</label>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+              className="w-full px-2 sm:px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
             >
               <option value="">Все статусы</option>
               <option value="active">Активен</option>
@@ -321,12 +459,12 @@ export default function UsersPage() {
               <option value="left">Покинул</option>
             </select>
           </div>
-          <div className="flex-1">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Источник</label>
+          <div className="flex-1 min-w-0">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Источник</label>
             <select
               value={sourceFilter}
               onChange={(e) => setSourceFilter(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+              className="w-full px-2 sm:px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
             >
               <option value="">Все источники</option>
               {sources.map((source) => (
@@ -339,144 +477,222 @@ export default function UsersPage() {
         </div>
 
         {/* Статистика */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-white p-4 rounded-lg border border-gray-200">
-            <div className="flex items-center gap-2 mb-2">
-              <Users size={20} className="text-gray-500" />
-              <div className="text-sm text-gray-500">Всего пользователей</div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+          <div className="bg-white p-3 sm:p-4 rounded-lg border border-gray-200">
+            <div className="flex items-center gap-1 sm:gap-2 mb-1 sm:mb-2">
+              <Users size={16} className="text-gray-500 sm:w-5 sm:h-5" />
+              <div className="text-xs sm:text-sm text-gray-500">Всего</div>
             </div>
-            <div className="text-2xl font-bold">{users.length}</div>
+            <div className="text-xl sm:text-2xl font-bold">{users.length}</div>
           </div>
-          <div className="bg-white p-4 rounded-lg border border-gray-200">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-5 h-5 bg-green-500 rounded-full"></div>
-              <div className="text-sm text-gray-500">Активных</div>
+          <div className="bg-white p-3 sm:p-4 rounded-lg border border-gray-200">
+            <div className="flex items-center gap-1 sm:gap-2 mb-1 sm:mb-2">
+              <div className="w-4 h-4 sm:w-5 sm:h-5 bg-green-500 rounded-full"></div>
+              <div className="text-xs sm:text-sm text-gray-500">Активных</div>
             </div>
-            <div className="text-2xl font-bold text-green-600">
+            <div className="text-xl sm:text-2xl font-bold text-green-600">
               {users.filter((u) => u.status === 'active').length}
             </div>
           </div>
-          <div className="bg-white p-4 rounded-lg border border-gray-200">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-5 h-5 bg-red-500 rounded-full"></div>
-              <div className="text-sm text-gray-500">Заблокированных</div>
+          <div className="bg-white p-3 sm:p-4 rounded-lg border border-gray-200">
+            <div className="flex items-center gap-1 sm:gap-2 mb-1 sm:mb-2">
+              <div className="w-4 h-4 sm:w-5 sm:h-5 bg-red-500 rounded-full"></div>
+              <div className="text-xs sm:text-sm text-gray-500">Заблокированных</div>
             </div>
-            <div className="text-2xl font-bold text-red-600">
+            <div className="text-xl sm:text-2xl font-bold text-red-600">
               {users.filter((u) => u.status === 'blocked').length}
             </div>
           </div>
-          <div className="bg-white p-4 rounded-lg border border-gray-200">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-5 h-5 bg-gray-500 rounded-full"></div>
-              <div className="text-sm text-gray-500">Покинувших</div>
+          <div className="bg-white p-3 sm:p-4 rounded-lg border border-gray-200">
+            <div className="flex items-center gap-1 sm:gap-2 mb-1 sm:mb-2">
+              <div className="w-4 h-4 sm:w-5 sm:h-5 bg-gray-500 rounded-full"></div>
+              <div className="text-xs sm:text-sm text-gray-500">Покинувших</div>
             </div>
-            <div className="text-2xl font-bold text-gray-600">
+            <div className="text-xl sm:text-2xl font-bold text-gray-600">
               {users.filter((u) => u.status === 'left').length}
             </div>
           </div>
         </div>
 
         {/* Список пользователей */}
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden -mx-4 sm:mx-0">
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3">
+            <div className="bg-red-50 border border-red-200 text-red-700 px-3 sm:px-4 py-2 sm:py-3 text-sm">
               {error}
             </div>
           )}
           {users.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">
+            <div className="p-6 sm:p-8 text-center text-gray-500 text-sm sm:text-base">
               {loading ? 'Загрузка...' : 'Нет пользователей'}
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Пользователь
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Бот
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Telegram ID
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Источник
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Статус
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Присоединился
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Последняя активность
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Действия
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {users.map((user) => (
-                    <tr key={user.id}>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">
+            <>
+              {/* Мобильный вид (карточки) */}
+              <div className="md:hidden space-y-2 p-2">
+                {users.map((user) => (
+                  <div key={user.id} className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
+                    <div className="flex items-start justify-between mb-2 gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-gray-900 truncate">
                           {getUserDisplayName(user)}
                         </div>
                         {user.username && (
-                          <div className="text-sm text-gray-500">@{user.username}</div>
+                          <div className="text-xs text-gray-500 mt-0.5 truncate">@{user.username}</div>
                         )}
-                        {user.tags && user.tags.length > 0 && (
-                          <div className="flex gap-1 mt-1">
-                            {user.tags.map((tag) => (
-                              <span
-                                key={tag.id}
-                                className="px-2 py-0.5 rounded text-xs"
-                                style={{ backgroundColor: `${tag.color}20`, color: tag.color }}
-                              >
-                                {tag.name}
-                              </span>
-                            ))}
-                          </div>
+                        {!selectedBotId && (
+                          <Link
+                            href={`/bots/${user.bot_id}`}
+                            className="text-xs text-indigo-600 hover:text-indigo-800 flex items-center gap-1 mt-1 truncate"
+                          >
+                            <BotIcon size={12} className="flex-shrink-0" />
+                            <span className="truncate">{user.bot_name || `Bot #${user.bot_id}`}</span>
+                          </Link>
                         )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <Link
-                          href={`/bots/${user.bot_id}`}
-                          className="text-sm text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
-                        >
-                          <BotIcon size={14} />
-                          {user.bot_name || `Bot #${user.bot_id}`}
-                        </Link>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {user.telegram_user_id}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {user.source || '—'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      </div>
+                      <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
                         {getStatusBadge(user.status)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(user.joined_at).toLocaleString('ru-RU')}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(user.last_activity).toLocaleString('ru-RU')}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
                         <UserActions
                           user={user}
-                          onAction={() => loadData()}
                         />
-                      </td>
+                      </div>
+                    </div>
+                    {user.tags && user.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mb-2">
+                        {user.tags.map((tag) => (
+                          <span
+                            key={tag.id}
+                            className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium"
+                            style={{
+                              backgroundColor: `${tag.color}20`,
+                              color: tag.color,
+                              border: `1px solid ${tag.color}40`,
+                            }}
+                          >
+                            {tag.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2 text-xs text-gray-500 pt-2 border-t border-gray-100">
+                      <span className="truncate">ID: {user.telegram_user_id}</span>
+                      {user.source && (
+                        <>
+                          <span>•</span>
+                          <span className="truncate">{user.source}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Десктопный вид (таблица) */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider lg:px-3">
+                        Пользователь
+                      </th>
+                      <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider lg:px-3 hidden lg:table-cell">
+                        Бот
+                      </th>
+                      <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider lg:px-3 hidden xl:table-cell">
+                        Telegram ID
+                      </th>
+                      <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider lg:px-3 hidden xl:table-cell">
+                        Источник
+                      </th>
+                      <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider lg:px-3">
+                        Статус
+                      </th>
+                      <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider lg:px-3 hidden 2xl:table-cell">
+                        Присоединился
+                      </th>
+                      <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider lg:px-3 hidden 2xl:table-cell">
+                        Последняя активность
+                      </th>
+                      <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider lg:px-3">
+                        Теги
+                      </th>
+                      <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider lg:px-3">
+                        Действия
+                      </th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {users.map((user) => (
+                      <tr key={user.id} className="hover:bg-gray-50">
+                        <td className="px-2 py-2 lg:px-3">
+                          <div className="text-xs lg:text-sm font-medium text-gray-900 max-w-[120px] lg:max-w-[180px] truncate">
+                            {getUserDisplayName(user)}
+                          </div>
+                          {user.username && (
+                            <div className="text-xs text-gray-500 truncate max-w-[120px] lg:max-w-[180px]">@{user.username}</div>
+                          )}
+                        </td>
+                        <td className="px-2 py-2 lg:px-3 hidden lg:table-cell">
+                          <Link
+                            href={`/bots/${user.bot_id}`}
+                            className="text-xs lg:text-sm text-indigo-600 hover:text-indigo-800 flex items-center gap-1 max-w-[150px] truncate"
+                          >
+                            <BotIcon size={12} className="flex-shrink-0" />
+                            <span className="truncate">{user.bot_name || `Bot #${user.bot_id}`}</span>
+                          </Link>
+                        </td>
+                        <td className="px-2 py-2 text-xs text-gray-900 lg:px-3 hidden xl:table-cell">
+                          {user.telegram_user_id}
+                        </td>
+                        <td className="px-2 py-2 text-xs text-gray-900 lg:px-3 hidden xl:table-cell max-w-[100px] truncate">
+                          {user.source || '—'}
+                        </td>
+                        <td className="px-2 py-2 lg:px-3">
+                          {getStatusBadge(user.status)}
+                        </td>
+                        <td className="px-2 py-2 text-xs text-gray-500 lg:px-3 hidden 2xl:table-cell whitespace-nowrap">
+                          {new Date(user.joined_at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                        </td>
+                        <td className="px-2 py-2 text-xs text-gray-500 lg:px-3 hidden 2xl:table-cell whitespace-nowrap">
+                          {new Date(user.last_activity).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                        </td>
+                        <td className="px-2 py-2 lg:px-3">
+                          <div className="flex flex-wrap gap-1 max-w-[100px] lg:max-w-[120px]">
+                            {user.tags && user.tags.length > 0 ? (
+                              user.tags.slice(0, 2).map((tag) => (
+                                <span
+                                  key={tag.id}
+                                  className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium"
+                                  style={{
+                                    backgroundColor: `${tag.color}20`,
+                                    color: tag.color,
+                                    border: `1px solid ${tag.color}40`,
+                                  }}
+                                  title={tag.name}
+                                >
+                                  {tag.name.length > 8 ? `${tag.name.slice(0, 8)}...` : tag.name}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-xs text-gray-400">—</span>
+                            )}
+                            {user.tags && user.tags.length > 2 && (
+                              <span className="text-xs text-gray-400" title={user.tags.slice(2).map(t => t.name).join(', ')}>
+                                +{user.tags.length - 2}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-2 py-2 lg:px-3">
+                          <UserActions
+                            user={user}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
       </div>

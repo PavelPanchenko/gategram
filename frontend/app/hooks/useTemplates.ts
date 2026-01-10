@@ -24,33 +24,38 @@ export function useTemplate(botId: number, templateId: number) {
   })
 }
 
-export function useCreateTemplate(botId: number) {
+export function useCreateTemplate() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (data: Partial<MessageTemplate>) => api.createTemplate(botId, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['templates', botId] })
+    mutationFn: ({ botId, data }: { botId: number; data: Partial<MessageTemplate> }) => 
+      api.createTemplate(botId, data),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['templates', variables.botId] })
+      queryClient.invalidateQueries({ queryKey: ['all-templates'] })
     },
   })
 }
 
-export function useUpdateTemplate(botId: number) {
+export function useUpdateTemplate() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ templateId, data }: { templateId: number; data: Partial<MessageTemplate> }) =>
+    mutationFn: ({ botId, templateId, data }: { botId: number; templateId: number; data: Partial<MessageTemplate> }) =>
       api.updateTemplate(botId, templateId, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['templates', botId] })
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['templates', variables.botId] })
+      queryClient.invalidateQueries({ queryKey: ['all-templates'] })
     },
   })
 }
 
-export function useDeleteTemplate(botId: number) {
+export function useDeleteTemplate() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (templateId: number) => api.deleteTemplate(botId, templateId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['templates', botId] })
+    mutationFn: ({ botId, templateId }: { botId: number; templateId: number }) => 
+      api.deleteTemplate(botId, templateId),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['templates', variables.botId] })
+      queryClient.invalidateQueries({ queryKey: ['all-templates'] })
     },
   })
 }

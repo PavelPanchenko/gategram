@@ -83,9 +83,10 @@ async def get_analytics_overview(
         TelegramUser.status == "active"
     ).count()
     
-    total_broadcasts = db.query(Broadcast).filter(Broadcast.owner_id == current_user.id).count()
+    # Считаем рассылки через боты пользователя
+    total_broadcasts = db.query(Broadcast).filter(Broadcast.bot_id.in_(bot_ids)).count()
     successful_broadcasts = db.query(Broadcast).filter(
-        Broadcast.owner_id == current_user.id,
+        Broadcast.bot_id.in_(bot_ids),
         Broadcast.status == "completed"
     ).count()
     

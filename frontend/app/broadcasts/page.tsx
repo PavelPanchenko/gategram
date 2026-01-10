@@ -1,22 +1,25 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import DashboardLayout from '@/app/components/DashboardLayout'
-import { api, Broadcast, Bot } from '@/app/lib/api'
-import { useDeleteBroadcast } from '@/app/hooks/useBroadcasts'
+import { Broadcast } from '@/app/lib/api'
+import { useBroadcasts, useDeleteBroadcast, useCancelBroadcast } from '@/app/hooks/useBroadcasts'
+import { useBots } from '@/app/hooks/useBots'
 import { showToast } from '@/app/utils/toast'
 import ConfirmModal from '@/app/components/ConfirmModal'
 import Link from 'next/link'
 import { Trash2 } from 'lucide-react'
 
 export default function BroadcastsPage() {
-  const [broadcasts, setBroadcasts] = useState<Broadcast[]>([])
-  const [bots, setBots] = useState<Bot[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [selectedBotId, setSelectedBotId] = useState<number | null>(null)
+  const [selectedBotId, setSelectedBotId] = useState<number | undefined>(undefined)
   const [statusFilter, setStatusFilter] = useState<string>('')
+  
+  const { data: broadcasts = [], isLoading: loading, error: queryError } = useBroadcasts(selectedBotId, statusFilter)
+  const { data: bots = [] } = useBots()
   const deleteBroadcast = useDeleteBroadcast()
+  const cancelBroadcast = useCancelBroadcast()
+  
+  const error = queryError ? (queryError as Error).message : ''
   
   // Состояние для модального окна подтверждения
   const [confirmModal, setConfirmModal] = useState<{
@@ -32,26 +35,6 @@ export default function BroadcastsPage() {
     onConfirm: () => {},
   })
 
-  useEffect(() => {
-    loadData()
-  }, [selectedBotId, statusFilter])
-
-  const loadData = async () => {
-    try {
-      setLoading(true)
-      const [broadcastsData, botsData] = await Promise.all([
-        api.getBroadcasts(selectedBotId || undefined, statusFilter || undefined),
-        api.getBots(),
-      ])
-      setBroadcasts(broadcastsData)
-      setBots(botsData)
-    } catch (err: any) {
-      setError(err.message || 'Ошибка загрузки данных')
-    } finally {
-      setLoading(false)
-    }
-  }
-
   const handleCancel = async (broadcastId: number) => {
     setConfirmModal({
       isOpen: true,
@@ -61,9 +44,8 @@ export default function BroadcastsPage() {
       onConfirm: async () => {
         setConfirmModal({ ...confirmModal, isOpen: false })
         try {
-          await api.cancelBroadcast(broadcastId)
+          await cancelBroadcast.mutateAsync(broadcastId)
           showToast.success('Рассылка отменена')
-          loadData()
         } catch (err: any) {
           showToast.error(err.message || 'Ошибка отмены рассылки')
         }
@@ -82,7 +64,6 @@ export default function BroadcastsPage() {
         try {
           await deleteBroadcast.mutateAsync(broadcastId)
           showToast.success('Рассылка удалена')
-          loadData()
         } catch (err: any) {
           showToast.error(err.message || 'Ошибка удаления рассылки')
         }
@@ -90,7 +71,7 @@ export default function BroadcastsPage() {
     })
   }
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string, scheduledAt?: string | null) => {
     const colors: Record<string, string> = {
       pending: 'bg-yellow-100 text-yellow-800',
       scheduled: 'bg-blue-100 text-blue-800',
@@ -107,11 +88,41 @@ export default function BroadcastsPage() {
       failed: 'Ошибка',
       cancelled: 'Отменена',
     }
-    return (
+    
+    const badge = (
       <span className={`px-2 py-1 rounded-full text-xs font-medium ${colors[status] || colors.pending}`}>
         {labels[status] || status}
       </span>
     )
+    
+    // Если статус "Запланирована" и есть время, показываем tooltip при наведении
+    if (status === 'scheduled' && scheduledAt) {
+      // scheduledAt приходит в UTC, конвертируем в локальное время
+      const scheduledDate = new Date(scheduledAt)
+      const formattedDate = scheduledDate.toLocaleString('ru-RU', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        timeZoneName: 'short',
+      })
+      
+      return (
+        <div className="relative group">
+          {badge}
+          <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block z-10">
+            <div className="bg-gray-900 text-white text-xs rounded py-1 px-2 whitespace-nowrap">
+              Запланировано на: {formattedDate}
+              <div className="absolute left-2 top-full -mt-1 border-4 border-transparent border-t-gray-900"></div>
+            </div>
+          </div>
+        </div>
+      )
+    }
+    
+    return badge
   }
 
   const getBotName = (botId: number) => {
@@ -227,7 +238,7 @@ export default function BroadcastsPage() {
                     {broadcast.message_text}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    {getStatusBadge(broadcast.status)}
+                    {getStatusBadge(broadcast.status, broadcast.scheduled_at)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {broadcast.sent_count} / {broadcast.total_users}
