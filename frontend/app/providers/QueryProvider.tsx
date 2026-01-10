@@ -13,6 +13,12 @@ export default function QueryProvider({ children }: { children: React.ReactNode 
             refetchOnWindowFocus: false,
             retry: 1,
           },
+          mutations: {
+            retry: 1,
+            onError: (error) => {
+              console.error('Mutation error:', error)
+            },
+          },
         },
       })
   )

@@ -28,7 +28,7 @@ export function useAuth() {
       }
     },
     onError: (error: Error) => {
-      // Ошибка уже обработана в api.login, просто пробрасываем
+      // Ошибка логируется, но пробрасывается через Promise.reject в функции login
       console.error('Login error:', error)
     },
   })
@@ -36,12 +36,8 @@ export function useAuth() {
   const registerMutation = useMutation({
     mutationFn: ({ email, password }: { email: string; password: string }) =>
       api.register(email, password),
-    onSuccess: (_, variables) => {
-      // После регистрации автоматически логинимся
-      loginMutation.mutate(variables)
-    },
     onError: (error: Error) => {
-      // Ошибка уже обработана в api.register, просто пробрасываем
+      // Ошибка логируется, но пробрасывается через Promise.reject в функции register
       console.error('Register error:', error)
     },
   })
@@ -58,9 +54,32 @@ export function useAuth() {
     user,
     isLoading,
     error,
-    login: loginMutation.mutate,
-    register: registerMutation.mutate,
-    logout: logoutMutation.mutate,
+    login: (data: { email: string; password: string }) => {
+      return new Promise<void>((resolve, reject) => {
+        loginMutation.mutate(data, {
+          onSuccess: () => resolve(),
+          onError: (error) => reject(error),
+        })
+      })
+    },
+    register: async (data: { email: string; password: string }) => {
+      return new Promise<void>((resolve, reject) => {
+        registerMutation.mutate(data, {
+          onSuccess: async () => {
+            // После регистрации автоматически логинимся
+            try {
+              await loginMutation.mutateAsync(data)
+              resolve()
+            } catch (error) {
+              // Если логин не удался, пробрасываем ошибку
+              reject(error)
+            }
+          },
+          onError: (error) => reject(error),
+        })
+      })
+    },
+    logout: () => logoutMutation.mutate(),
     isLoggingIn: loginMutation.isPending,
     isRegistering: registerMutation.isPending,
   }

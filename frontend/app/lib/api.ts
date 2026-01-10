@@ -2,6 +2,12 @@
 // NEXT_PUBLIC_* переменные доступны и на клиенте, и на сервере в Next.js
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'
 
+// Логирование для отладки (только в dev режиме)
+if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+  console.log('API_URL:', API_URL)
+  console.log('NEXT_PUBLIC_API_URL from env:', process.env.NEXT_PUBLIC_API_URL)
+}
+
 // Проверка истечения токена
 function isTokenExpired(token: string): boolean {
   try {
@@ -242,8 +248,8 @@ class ApiClient {
       }
     }
 
-    const headers: HeadersInit = {
-      ...options.headers,
+    const headers: Record<string, string> = {
+      ...(options.headers as Record<string, string> || {}),
     }
 
     // Добавляем Content-Type только если его нет и это не FormData
@@ -255,11 +261,31 @@ class ApiClient {
       headers['Authorization'] = `Bearer ${token}`
     }
 
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+    const url = `${this.baseUrl}${endpoint}`
+    
+    // Логирование для отладки
+    if (process.env.NODE_ENV === 'development') {
+      console.log('API Request:', {
+        method: options.method || 'GET',
+        url,
+        headers: { ...headers, Authorization: token ? 'Bearer ***' : undefined },
+      })
+    }
+
+    const response = await fetch(url, {
       ...options,
       headers,
       credentials: 'include',
     })
+    
+    // Логирование ответа
+    if (process.env.NODE_ENV === 'development') {
+      console.log('API Response:', {
+        status: response.status,
+        statusText: response.statusText,
+        url: response.url,
+      })
+    }
 
     if (!response.ok) {
       // Если 401, пытаемся обновить токен и повторить запрос
@@ -334,6 +360,40 @@ class ApiClient {
     localStorage.setItem('access_token', token)
   }
 
+  private getRefreshToken(): string | null {
+    if (typeof window === 'undefined') return null
+    return localStorage.getItem('refresh_token')
+  }
+
+  private setRefreshToken(token: string): void {
+    if (typeof window === 'undefined') return
+    localStorage.setItem('refresh_token', token)
+  }
+
+  private isTokenExpired(token: string): boolean {
+    return isTokenExpired(token)
+  }
+
+  private async refreshToken(refreshToken: string): Promise<TokenResponse> {
+    return refreshAccessToken().then(async (newToken) => {
+      if (!newToken) {
+        throw new Error('Failed to refresh token')
+      }
+      // Получаем новый refresh token из ответа
+      const response = await fetch(`${this.baseUrl}/auth/refresh`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      })
+      if (!response.ok) {
+        throw new Error('Failed to refresh token')
+      }
+      return response.json()
+    })
+  }
+
   private removeToken(): void {
     if (typeof window === 'undefined') return
     localStorage.removeItem('access_token')
@@ -342,6 +402,12 @@ class ApiClient {
 
   // Auth
   async register(email: string, password: string): Promise<User> {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Register Request:', {
+        endpoint: '/auth/register',
+        baseUrl: this.baseUrl,
+      })
+    }
     return this.request<User>('/auth/register', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
@@ -353,7 +419,18 @@ class ApiClient {
     formData.append('username', email)
     formData.append('password', password)
 
-    const response = await fetch(`${this.baseUrl}/auth/login`, {
+    const url = `${this.baseUrl}/auth/login`
+    
+    // Логирование для отладки
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Login Request:', {
+        method: 'POST',
+        url,
+        baseUrl: this.baseUrl,
+      })
+    }
+
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -362,8 +439,18 @@ class ApiClient {
       credentials: 'include',
     })
 
+    // Логирование ответа
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Login Response:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+      })
+    }
+
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: 'Invalid credentials' }))
+      console.error('Login error response:', error)
       throw new Error(error.detail || 'Invalid credentials')
     }
 
@@ -517,7 +604,7 @@ class ApiClient {
     }
 
     const token = this.getToken()
-    const headers: HeadersInit = {}
+    const headers: Record<string, string> = {}
     if (token) {
       headers['Authorization'] = `Bearer ${token}`
     }
@@ -644,7 +731,7 @@ class ApiClient {
     }
 
     const token = this.getToken()
-    const headers: HeadersInit = {}
+    const headers: Record<string, string> = {}
     if (token) {
       headers['Authorization'] = `Bearer ${token}`
     }
