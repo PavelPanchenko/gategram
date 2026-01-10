@@ -291,7 +291,7 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 
 ```bash
 # Frontend .env.local
-NEXT_PUBLIC_API_URL=http://localhost:8001
+NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
 4. **Запустите все сервисы:**
@@ -324,12 +324,10 @@ docker compose ps
 
 7. **Откройте в браузере:**
 
-- **Frontend**: http://localhost:3001
-- **Backend API**: http://localhost:8001
-- **API Документация (Swagger)**: http://localhost:8001/docs
-- **API Документация (ReDoc)**: http://localhost:8001/redoc
-
-> **Примечание**: Используются порты 3001 и 8001 для избежания конфликтов с другими приложениями на сервере.
+- **Frontend**: http://localhost:3000
+- **Backend API**: http://localhost:8000
+- **API Документация (Swagger)**: http://localhost:8000/docs
+- **API Документация (ReDoc)**: http://localhost:8000/redoc
 
 8. **Создайте первого пользователя:**
 
@@ -375,7 +373,7 @@ pip install -r requirements.txt
 DATABASE_URL=postgresql://gategram:gategram@localhost:5432/gategram
 REDIS_URL=redis://localhost:6379/0
 SECRET_KEY=your-secret-key-change-in-production-min-32-characters
-CORS_ORIGINS=http://localhost:3001
+CORS_ORIGINS=http://localhost:3000
 ```
 
 3. **Убедитесь, что PostgreSQL и Redis запущены:**
@@ -394,7 +392,7 @@ alembic upgrade head
 5. **Запустите сервер:**
 
 ```bash
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 6. **В отдельном терминале запустите Celery Worker:**
@@ -421,7 +419,7 @@ npm install
 2. **Создайте файл `.env.local`:**
 
 ```bash
-NEXT_PUBLIC_API_URL=http://localhost:8001
+NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
 3. **Запустите dev сервер:**
@@ -430,7 +428,7 @@ NEXT_PUBLIC_API_URL=http://localhost:8001
 npm run dev
 ```
 
-Frontend будет доступен на http://localhost:3001
+Frontend будет доступен на http://localhost:3000
 
 ## Переменные окружения
 
@@ -489,8 +487,8 @@ Frontend будет доступен на http://localhost:3001
 
 API использует REST архитектуру и JWT аутентификацию. Полная документация доступна после запуска бэкенда:
 
-- **Swagger UI**: http://localhost:8001/docs
-- **ReDoc**: http://localhost:8001/redoc
+- **Swagger UI**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc
 
 ### Основные группы эндпоинтов
 
@@ -791,7 +789,7 @@ docker compose exec backend mkdir -p /app/media/broadcasts
 5. **Мониторинг производительности:**
    ```bash
    # Проверка здоровья системы
-   curl http://localhost:8001/health
+   curl http://localhost:8000/health
    
    # Мониторинг Celery
    celery -A app.celery_app inspect active
