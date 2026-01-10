@@ -36,11 +36,10 @@ services:
     container_name: gategram_backend
     env_file:
       - backend/.env
+    # Переменные читаются из backend/.env через env_file
+    # Если нужно переопределить, можно добавить в environment
     environment:
-      DATABASE_URL: ${DATABASE_URL}
-      REDIS_URL: ${REDIS_URL}
-      SECRET_KEY: ${SECRET_KEY}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:3001}
     volumes:
       - ./backend:/app
     ports:
@@ -80,9 +79,7 @@ services:
     container_name: gategram_celery
     env_file:
       - backend/.env
-    environment:
-      DATABASE_URL: ${DATABASE_URL}
-      REDIS_URL: ${REDIS_URL}
+    # Переменные читаются из backend/.env через env_file
     volumes:
       - ./backend:/app
     depends_on:
@@ -99,9 +96,7 @@ services:
     container_name: gategram_celery_beat
     env_file:
       - backend/.env
-    environment:
-      DATABASE_URL: ${DATABASE_URL}
-      REDIS_URL: ${REDIS_URL}
+    # Переменные читаются из backend/.env через env_file
     volumes:
       - ./backend:/app
     depends_on:

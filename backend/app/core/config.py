@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings
-from typing import List
+from pydantic import field_validator
+from typing import List, Optional
 
 
 class Settings(BaseSettings):
@@ -10,12 +11,28 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "postgresql://gategram:gategram@postgres:5432/gategram"
     # Переменные для docker-compose (могут быть не использованы в коде, но должны быть в Settings)
-    POSTGRES_USER: str | None = None
-    POSTGRES_PASSWORD: str | None = None
-    POSTGRES_DB: str | None = None
+    POSTGRES_USER: Optional[str] = None
+    POSTGRES_PASSWORD: Optional[str] = None
+    POSTGRES_DB: Optional[str] = None
     
     # Redis
     REDIS_URL: str = "redis://redis:6379/0"
+    
+    @field_validator('DATABASE_URL', mode='before')
+    @classmethod
+    def validate_database_url(cls, v) -> str:
+        """Если DATABASE_URL пустой, используем значение по умолчанию"""
+        if not v or (isinstance(v, str) and v.strip() == ''):
+            return "postgresql://gategram:gategram@postgres:5432/gategram"
+        return str(v)
+    
+    @field_validator('REDIS_URL', mode='before')
+    @classmethod
+    def validate_redis_url(cls, v) -> str:
+        """Если REDIS_URL пустой, используем значение по умолчанию"""
+        if not v or (isinstance(v, str) and v.strip() == ''):
+            return "redis://redis:6379/0"
+        return str(v)
     
     # JWT
     SECRET_KEY: str = "your-secret-key-change-in-production"
