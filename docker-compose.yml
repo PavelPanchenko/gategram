@@ -81,7 +81,7 @@ services:
       dockerfile: Dockerfile
     container_name: gategram_celery
     env_file:
-      - .env
+      - backend/.env
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql://gategram:gategram@postgres:5432/gategram}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
@@ -100,7 +100,7 @@ services:
       dockerfile: Dockerfile
     container_name: gategram_celery_beat
     env_file:
-      - .env
+      - backend/.env
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql://gategram:gategram@postgres:5432/gategram}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
