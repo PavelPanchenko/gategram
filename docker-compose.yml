@@ -35,7 +35,7 @@ services:
       dockerfile: Dockerfile
     container_name: gategram_backend
     env_file:
-      - .env
+      - backend/.env
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql://gategram:gategram@postgres:5432/gategram}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
@@ -61,7 +61,7 @@ services:
         NODE_ENV: ${NODE_ENV:-development}
     container_name: gategram_frontend
     env_file:
-      - .env.local
+      - frontend/.env.local
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
       NODE_ENV: ${NODE_ENV:-development}
