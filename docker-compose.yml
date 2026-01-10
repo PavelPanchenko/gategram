@@ -34,11 +34,13 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: gategram_backend
+    env_file:
+      - .env
     environment:
-      - DATABASE_URL=${DATABASE_URL:-postgresql://gategram:gategram@postgres:5432/gategram}
-      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
-      - SECRET_KEY=${SECRET_KEY:-your-secret-key-change-in-production-min-32-chars}
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://gategram:gategram@postgres:5432/gategram}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      SECRET_KEY: ${SECRET_KEY:-your-secret-key-change-in-production-min-32-chars}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
     volumes:
       - ./backend:/app
     ports:
@@ -55,12 +57,14 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
-        - NODE_ENV=${NODE_ENV:-development}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
+        NODE_ENV: ${NODE_ENV:-development}
     container_name: gategram_frontend
+    env_file:
+      - .env.local
     environment:
-      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
-      - NODE_ENV=${NODE_ENV:-development}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
+      NODE_ENV: ${NODE_ENV:-development}
     volumes:
       - ./frontend:/app
       - /app/node_modules
@@ -76,9 +80,11 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: gategram_celery
+    env_file:
+      - .env
     environment:
-      - DATABASE_URL=${DATABASE_URL:-postgresql://gategram:gategram@postgres:5432/gategram}
-      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://gategram:gategram@postgres:5432/gategram}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
     volumes:
       - ./backend:/app
     depends_on:
@@ -93,9 +99,11 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: gategram_celery_beat
+    env_file:
+      - .env
     environment:
-      - DATABASE_URL=${DATABASE_URL:-postgresql://gategram:gategram@postgres:5432/gategram}
-      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://gategram:gategram@postgres:5432/gategram}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
     volumes:
       - ./backend:/app
     depends_on:
