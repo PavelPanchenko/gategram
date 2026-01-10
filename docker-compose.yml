@@ -56,13 +56,13 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      # Build args опциональны - если не указаны, Dockerfile использует frontend/.env.local
       args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
-        NODE_ENV: ${NODE_ENV}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
+        NODE_ENV: ${NODE_ENV:-development}
     container_name: gategram_frontend
     environment:
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
-      NODE_ENV: ${NODE_ENV}
+      NODE_ENV: ${NODE_ENV:-development}
     volumes:
       - ./frontend:/app
       - /app/node_modules

@@ -1,8 +1,6 @@
-// Для клиентской стороны используем относительный URL или полный
-const API_URL = 
-  typeof window !== 'undefined' 
-    ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000')
-    : 'http://localhost:8000'
+// Используем переменную окружения везде (клиент и сервер)
+// NEXT_PUBLIC_* переменные доступны и на клиенте, и на сервере в Next.js
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'
 
 // Проверка истечения токена
 function isTokenExpired(token: string): boolean {
