@@ -264,35 +264,59 @@ git clone <repository-url>
 cd GateGram
 ```
 
-2. **Создайте файл с переменными окружения:**
+2. **Создайте файлы с переменными окружения:**
 
-Создайте файл `backend/.env` (если его нет):
+**Важно**: Все сервисы (backend, celery, postgres) используют `backend/.env`, фронтенд использует `frontend/.env.local`.
+
+Создайте файл `backend/.env`:
 
 ```bash
-# Backend .env
-DATABASE_URL=postgresql://gategram:gategram@postgres:5432/gategram
+# Database - укажите либо DATABASE_URL, либо компоненты
+# Вариант 1: Прямой URL
+DATABASE_URL=postgresql://gategram:your_password@postgres:5432/gategram
+
+# Вариант 2: Компоненты (будет построен DATABASE_URL автоматически)
+POSTGRES_USER=gategram
+POSTGRES_PASSWORD=your_secure_password_here
+POSTGRES_DB=gategram
+
+# Redis
 REDIS_URL=redis://redis:6379/0
+
+# JWT
 SECRET_KEY=your-secret-key-change-in-production-min-32-characters-long
-CORS_ORIGINS=http://localhost:3000,http://localhost:3001
+ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 REFRESH_TOKEN_EXPIRE_DAYS=7
+
+# CORS
+CORS_ORIGINS=http://localhost:3000,http://localhost:3001
+
+# App
 DEBUG=False
+APP_NAME=GateGram
+TELEGRAM_API_URL=https://api.telegram.org
 ```
 
-**Важно**: Замените `SECRET_KEY` на случайную строку минимум 32 символа. Можно сгенерировать так:
-
-```bash
-python -c "import secrets; print(secrets.token_urlsafe(32))"
-```
-
-3. **Создайте файл для фронтенда (опционально):**
+**Важно**: 
+- Замените `POSTGRES_PASSWORD` и `SECRET_KEY` на безопасные значения
+- `SECRET_KEY` минимум 32 символа, можно сгенерировать: `python -c "import secrets; print(secrets.token_urlsafe(32))"`
 
 Создайте файл `frontend/.env.local`:
 
 ```bash
-# Frontend .env.local
-NEXT_PUBLIC_API_URL=http://localhost:8000
+# API URL (обязательно)
+NEXT_PUBLIC_API_URL=http://localhost:8000/api
+
+# Для production используйте URL вашего сервера:
+# NEXT_PUBLIC_API_URL=http://your-domain.com:8000/api
 ```
+
+**Для Docker Compose**: Создайте симлинк для удобства:
+```bash
+ln -s backend/.env .env
+```
+Это позволит Docker Compose читать переменные для подстановки `${VARIABLE}`.
 
 4. **Запустите все сервисы:**
 
@@ -419,7 +443,7 @@ npm install
 2. **Создайте файл `.env.local`:**
 
 ```bash
-NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_API_URL=http://localhost:8000/api
 ```
 
 3. **Запустите dev сервер:**
@@ -432,25 +456,35 @@ Frontend будет доступен на http://localhost:3000
 
 ## Переменные окружения
 
-### Backend (.env)
+Все переменные для бэкенда, Celery и PostgreSQL должны быть в `backend/.env`.  
+Все переменные для фронтенда должны быть в `frontend/.env.local`.
+
+### Backend (backend/.env)
 
 | Переменная | Описание | Значение по умолчанию | Обязательно |
 |-----------|----------|----------------------|-------------|
-| `DATABASE_URL` | PostgreSQL connection string | `postgresql://gategram:gategram@postgres:5432/gategram` | Да |
-| `REDIS_URL` | Redis connection string | `redis://redis:6379/0` | Да |
+| `DATABASE_URL` | PostgreSQL connection string (полный URL) | - | Да* |
+| `POSTGRES_USER` | PostgreSQL username | - | Да* |
+| `POSTGRES_PASSWORD` | PostgreSQL password | - | Да* |
+| `POSTGRES_DB` | PostgreSQL database name | - | Да* |
+| `REDIS_URL` | Redis connection string | - | Да |
 | `SECRET_KEY` | Секретный ключ для JWT (минимум 32 символа) | - | Да |
-| `CORS_ORIGINS` | Разрешенные origins для CORS (через запятую) | `http://localhost:3001` | Нет |
+| `CORS_ORIGINS` | Разрешенные origins для CORS (через запятую) | `http://localhost:3000,http://localhost:3001` | Нет |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | Время жизни access token (минуты) | `30` | Нет |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | Время жизни refresh token (дни) | `7` | Нет |
 | `DEBUG` | Режим отладки | `False` | Нет |
 | `ALGORITHM` | Алгоритм JWT | `HS256` | Нет |
+| `APP_NAME` | Имя приложения | `GateGram` | Нет |
 | `TELEGRAM_API_URL` | URL Telegram API | `https://api.telegram.org` | Нет |
 
-### Frontend (.env.local)
+**\*Примечание**: Укажите либо `DATABASE_URL`, либо `POSTGRES_USER` + `POSTGRES_PASSWORD` + `POSTGRES_DB`.  
+Если указаны компоненты, `DATABASE_URL` будет построен автоматически.
+
+### Frontend (frontend/.env.local)
 
 | Переменная | Описание | Значение по умолчанию | Обязательно |
 |-----------|----------|----------------------|-------------|
-| `NEXT_PUBLIC_API_URL` | URL бэкенд API | `http://localhost:8000` | Да |
+| `NEXT_PUBLIC_API_URL` | URL бэкенд API (с /api) | `http://localhost:8000/api` | Да |
 
 ## Модели базы данных
 

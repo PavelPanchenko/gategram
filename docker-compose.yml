@@ -1,7 +1,14 @@
+# Все переменные окружения читаются из backend/.env
+# Для подстановки ${VARIABLE} в docker-compose.yml запускайте:
+# docker compose --env-file backend/.env up
+# Или создайте симлинк: ln -s backend/.env .env
+
 services:
   postgres:
     image: postgres:16-alpine
     container_name: gategram_postgres
+    env_file:
+      - backend/.env
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -55,13 +62,8 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      # Build args опциональны - если не указаны, Dockerfile использует frontend/.env.local
-      args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
-        NODE_ENV: ${NODE_ENV:-development}
+      # Переменные читаются из frontend/.env.local, который копируется в контейнер
     container_name: gategram_frontend
-    environment:
-      NODE_ENV: ${NODE_ENV:-development}
     volumes:
       - ./frontend:/app
       - /app/node_modules
