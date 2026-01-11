@@ -48,6 +48,6 @@ Thumbs.db
 media/
 
 # Celery
-celerybeat-schedule
-celerybeat-schedule.db
-celerybeat.pid
+backend/celerybeat-schedule
+backend/celerybeat-schedule.db
+backend/celerybeat.pid

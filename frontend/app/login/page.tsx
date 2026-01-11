@@ -2,157 +2,220 @@
 
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import { useAuth } from '@/app/hooks/useAuth'
+import { Eye, EyeOff, Mail, Lock, Loader2 } from 'lucide-react'
 
-type FormData = {
-  email: string
-  password: string
-}
+// Zod схемы валидации
+const loginSchema = z.object({
+  email: z
+    .string()
+    .min(1, 'Email обязателен')
+    .email('Введите корректный email'),
+  password: z
+    .string()
+    .min(6, 'Пароль должен содержать минимум 6 символов')
+    .max(100, 'Пароль слишком длинный'),
+})
+
+const registerSchema = loginSchema.extend({
+  password: z
+    .string()
+    .min(8, 'Пароль должен содержать минимум 8 символов')
+    .max(100, 'Пароль слишком длинный')
+    .regex(/[a-z]/, 'Пароль должен содержать хотя бы одну строчную букву')
+    .regex(/[A-Z]/, 'Пароль должен содержать хотя бы одну заглавную букву')
+    .regex(/[0-9]/, 'Пароль должен содержать хотя бы одну цифру'),
+})
+
+type FormData = z.infer<typeof loginSchema>
 
 export default function LoginPage() {
   const [isRegister, setIsRegister] = useState(false)
-  const { login, register, isLoggingIn, isRegistering } = useAuth()
+  const { login, register: registerUser, isLoggingIn, isRegistering } = useAuth()
   const [error, setError] = useState<string | null>(null)
   const [showPassword, setShowPassword] = useState(false)
 
   const {
-    register: registerField,
+    register,
     handleSubmit,
-    formState: { errors },
+    formState: { errors, isSubmitting },
     reset,
-  } = useForm<FormData>()
+    setFocus,
+  } = useForm<FormData>({
+    resolver: zodResolver(isRegister ? registerSchema : loginSchema),
+    mode: 'onBlur', // Валидация при потере фокуса
+  })
 
-  const onSubmit = async (data: FormData, e?: React.BaseSyntheticEvent) => {
-    e?.preventDefault() // Явно предотвращаем стандартное поведение формы
+  const onSubmit = async (data: FormData) => {
     setError(null)
     try {
       if (isRegister) {
-        await register({ email: data.email, password: data.password })
-        // Редирект происходит в useAuth после успешного логина
+        await registerUser({ email: data.email, password: data.password })
       } else {
         await login({ email: data.email, password: data.password })
-        // Редирект происходит в useAuth
       }
     } catch (err: any) {
       setError(err?.message || (isRegister ? 'Ошибка при регистрации' : 'Неверный email или пароль'))
     }
   }
 
-  const isLoading = isLoggingIn || isRegistering
+  const toggleMode = () => {
+    setError(null)
+    setIsRegister(!isRegister)
+    reset()
+    // Фокус на email поле после переключения
+    setTimeout(() => setFocus('email'), 100)
+  }
+
+  const isLoading = isLoggingIn || isRegistering || isSubmitting
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow-md">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            {isRegister ? 'Регистрация' : 'Вход в GateGram'}
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 via-gray-50 to-indigo-50 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-6 sm:space-y-8">
+        {/* Header */}
+        <div className="text-center">
+          <div className="mx-auto h-12 w-12 sm:h-14 sm:w-14 bg-indigo-600 rounded-xl flex items-center justify-center mb-4">
+            <svg className="h-7 w-7 sm:h-8 sm:w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+          </div>
+          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">
+            {isRegister ? 'Создать аккаунт' : 'Добро пожаловать'}
           </h2>
+          <p className="mt-2 text-sm text-gray-600">
+            {isRegister ? 'Зарегистрируйтесь для начала работы' : 'Войдите в свой аккаунт GateGram'}
+          </p>
         </div>
-        <form 
-          className="mt-8 space-y-6" 
-          onSubmit={(e) => {
-            e.preventDefault() // Предотвращаем стандартную отправку формы
-            handleSubmit(onSubmit)(e) // Вызываем обработчик react-hook-form
-          }}
-        >
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-              {error}
-            </div>
-          )}
-          <div className="space-y-4">
+
+        {/* Form Card */}
+        <div className="bg-white py-6 px-4 sm:py-8 sm:px-10 rounded-xl sm:rounded-2xl shadow-xl border border-gray-100">
+          <form 
+            className="space-y-5 sm:space-y-6" 
+            onSubmit={handleSubmit(onSubmit)}
+            noValidate
+          >
+            {/* Error Alert */}
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2.5 sm:px-4 sm:py-3 rounded-lg text-sm flex items-start gap-2">
+                <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+                <span>{error}</span>
+              </div>
+            )}
+
+            {/* Email Field */}
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1.5">
                 Email
               </label>
-              <input
-                id="email"
-                type="email"
-                {...registerField('email', {
-                  required: 'Email обязателен',
-                  pattern: {
-                    value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                    message: 'Некорректный email',
-                  },
-                })}
-                className={`mt-1 appearance-none relative block w-full px-3 py-2 border ${
-                  errors.email ? 'border-red-300' : 'border-gray-300'
-                } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500`}
-                placeholder="your@email.com"
-              />
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Mail className="h-5 w-5 text-gray-400" />
+                </div>
+                <input
+                  id="email"
+                  type="email"
+                  autoComplete="email"
+                  {...register('email')}
+                  className={`block w-full pl-10 pr-3 py-2.5 sm:py-3 border ${
+                    errors.email ? 'border-red-300 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 focus:ring-indigo-500 focus:border-indigo-500'
+                  } rounded-lg text-sm sm:text-base placeholder-gray-400 focus:outline-none focus:ring-2 transition-colors`}
+                  placeholder="your@email.com"
+                />
+              </div>
               {errors.email && (
-                <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
+                <p className="mt-1.5 text-xs sm:text-sm text-red-600 flex items-center gap-1">
+                  <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  {errors.email.message}
+                </p>
               )}
             </div>
+
+            {/* Password Field */}
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1.5">
                 Пароль
               </label>
               <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Lock className="h-5 w-5 text-gray-400" />
+                </div>
                 <input
                   id="password"
                   type={showPassword ? 'text' : 'password'}
-                  {...registerField('password', {
-                    required: 'Пароль обязателен',
-                    minLength: {
-                      value: 6,
-                      message: 'Пароль должен быть не менее 6 символов',
-                    },
-                  })}
-                  className={`mt-1 appearance-none relative block w-full px-3 py-2 pr-10 border ${
-                    errors.password ? 'border-red-300' : 'border-gray-300'
-                  } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500`}
+                  autoComplete={isRegister ? 'new-password' : 'current-password'}
+                  {...register('password')}
+                  className={`block w-full pl-10 pr-12 py-2.5 sm:py-3 border ${
+                    errors.password ? 'border-red-300 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 focus:ring-indigo-500 focus:border-indigo-500'
+                  } rounded-lg text-sm sm:text-base placeholder-gray-400 focus:outline-none focus:ring-2 transition-colors`}
                   placeholder="••••••••"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center hover:text-gray-700 text-gray-400 transition-colors touch-target"
                   tabIndex={-1}
+                  aria-label={showPassword ? 'Скрыть пароль' : 'Показать пароль'}
                 >
-                  {showPassword ? (
-                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                    </svg>
-                  ) : (
-                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                    </svg>
-                  )}
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                 </button>
               </div>
               {errors.password && (
-                <p className="mt-1 text-sm text-red-600">{errors.password.message}</p>
+                <p className="mt-1.5 text-xs sm:text-sm text-red-600 flex items-start gap-1">
+                  <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  <span>{errors.password.message}</span>
+                </p>
+              )}
+              {isRegister && !errors.password && (
+                <p className="mt-1.5 text-xs text-gray-500">
+                  Минимум 8 символов, включая заглавные и строчные буквы, цифры
+                </p>
               )}
             </div>
-          </div>
 
-          <div>
+            {/* Submit Button */}
             <button
               type="submit"
               disabled={isLoading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+              className="w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent text-sm sm:text-base font-semibold rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl active:scale-[0.98]"
             >
-              {isLoading ? 'Загрузка...' : isRegister ? 'Зарегистрироваться' : 'Войти'}
+              {isLoading ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>{isRegister ? 'Регистрация...' : 'Вход...'}</span>
+                </>
+              ) : (
+                <span>{isRegister ? 'Зарегистрироваться' : 'Войти'}</span>
+              )}
             </button>
-          </div>
+          </form>
 
-          <div className="text-center">
+          {/* Toggle Mode */}
+          <div className="mt-6 text-center">
             <button
               type="button"
-              onClick={(e) => {
-                e.preventDefault() // Предотвращаем любое стандартное поведение
-                setError(null)
-                setIsRegister(!isRegister)
-                reset() // Очищаем форму при переключении
-              }}
-              className="text-sm text-indigo-600 hover:text-indigo-500"
+              onClick={toggleMode}
+              className="text-sm font-medium text-indigo-600 hover:text-indigo-500 transition-colors"
             >
-              {isRegister ? 'Уже есть аккаунт? Войти' : 'Нет аккаунта? Зарегистрироваться'}
+              {isRegister ? 'Уже есть аккаунт? Войти' : 'Нет аккаунта? Создать'}
             </button>
           </div>
-        </form>
+        </div>
+
+        {/* Footer */}
+        <p className="text-center text-xs text-gray-500 px-4">
+          Продолжая, вы соглашаетесь с нашими{' '}
+          <a href="#" className="text-indigo-600 hover:text-indigo-500">
+            условиями использования
+          </a>
+        </p>
       </div>
     </div>
   )

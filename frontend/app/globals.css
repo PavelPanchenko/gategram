@@ -24,5 +24,19 @@ body {
   .text-balance {
     text-wrap: balance;
   }
+  
+  /* Минимальный размер touch target для мобильных устройств (44x44px по рекомендациям Apple/Google) */
+  .touch-target {
+    @apply min-h-[44px] min-w-[44px] flex items-center justify-center;
+  }
+  
+  /* Улучшенные кнопки для мобильных */
+  .btn-mobile {
+    @apply px-4 py-3 text-base font-medium rounded-lg transition-colors;
+  }
+  
+  .btn-mobile-sm {
+    @apply px-3 py-2 text-sm font-medium rounded-md transition-colors;
+  }
 }
 
