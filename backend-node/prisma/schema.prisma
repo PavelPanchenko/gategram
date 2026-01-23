@@ -1,0 +1,190 @@
+// Prisma schema для работы с существующей БД
+// Используем существующие таблицы в PostgreSQL
+// 
+// ВАЖНО: Эта схема содержит только базовые модели (User, Bot)
+// Остальные модели (TelegramUser, Broadcast, Trigger и т.д.) 
+// можно добавить по мере миграции соответствующих эндпоинтов
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             Int       @id @default(autoincrement())
+  email          String    @unique @db.VarChar
+  hashedPassword String    @map("hashed_password") @db.VarChar
+  isActive       Boolean   @default(true) @map("is_active")
+  isSuperuser    Boolean   @default(false) @map("is_superuser")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime? @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  bots Bot[]
+
+  @@map("users")
+}
+
+model Bot {
+  id                      Int       @id @default(autoincrement())
+  ownerId                 Int       @map("owner_id")
+  token                   String    @unique @db.VarChar
+  username                String?   @db.VarChar
+  name                    String?   @db.VarChar
+  isActive                Boolean   @default(true) @map("is_active")
+  welcomeMessage          String?   @map("welcome_message") @db.Text
+  requiredInteraction     Boolean   @default(true) @map("required_interaction")
+  interactionDelaySeconds Int       @default(5) @map("interaction_delay_seconds")
+  continueButtonText      String    @default("✅ Продолжить") @map("continue_button_text") @db.VarChar
+  channelLink             String?   @map("channel_link") @db.VarChar
+  channels                Json      @default("[]")
+  settings                Json      @default("{}")
+  createdAt               DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt               DateTime? @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  owner           User             @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  telegramUsers   TelegramUser[]
+  broadcasts      Broadcast[]
+  messageTemplates MessageTemplate[]
+  userTags        UserTag[]
+  triggers        Trigger[]
+  referralLinks   ReferralLink[]
+
+  @@map("bots")
+}
+
+model TelegramUser {
+  id              Int       @id @default(autoincrement())
+  botId           Int       @map("bot_id")
+  telegramUserId  BigInt    @map("telegram_user_id")
+  username        String?   @db.VarChar
+  firstName       String?   @map("first_name") @db.VarChar
+  lastName        String?   @map("last_name") @db.VarChar
+  source          String?   @db.VarChar
+  status          String    @default("active") @db.VarChar
+  joinedAt        DateTime  @default(now()) @map("joined_at") @db.Timestamptz(6)
+  lastActivity    DateTime  @default(now()) @updatedAt @map("last_activity") @db.Timestamptz(6)
+
+  bot   Bot       @relation(fields: [botId], references: [id], onDelete: Cascade)
+  tags  UserTag[] @relation("UserTagsAssociation")
+
+  @@index([botId])
+  @@index([telegramUserId])
+  @@index([source])
+  @@map("telegram_users")
+}
+
+model UserTag {
+  id          Int       @id @default(autoincrement())
+  botId       Int       @map("bot_id")
+  name        String    @db.VarChar
+  color       String    @default("#3B82F6") @db.VarChar
+  description String?   @db.VarChar
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  bot    Bot            @relation(fields: [botId], references: [id], onDelete: Cascade)
+  users  TelegramUser[] @relation("UserTagsAssociation")
+
+  @@index([botId])
+  @@index([name])
+  @@map("user_tags")
+}
+
+model MessageTemplate {
+  id        Int       @id @default(autoincrement())
+  botId     Int       @map("bot_id")
+  name      String    @db.VarChar
+  content   String    @db.Text
+  variables Json      @default("{}")
+  isActive  Boolean   @default(true) @map("is_active")
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime? @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  bot Bot @relation(fields: [botId], references: [id], onDelete: Cascade)
+
+  @@index([botId])
+  @@map("message_templates")
+}
+
+model Broadcast {
+  id           Int       @id @default(autoincrement())
+  botId        Int       @map("bot_id")
+  ownerId      Int       @map("owner_id")
+  messageText  String    @map("message_text") @db.Text
+  templateId   Int?      @map("template_id")
+  mediaType    String?   @map("media_type") @db.VarChar
+  mediaUrl     String?   @map("media_url") @db.VarChar
+  mediaFiles   Json?
+  status       String    @default("pending") @db.VarChar
+  scheduledAt  DateTime? @map("scheduled_at") @db.Timestamptz(6)
+  startedAt    DateTime? @map("started_at") @db.Timestamptz(6)
+  completedAt  DateTime? @map("completed_at") @db.Timestamptz(6)
+  totalUsers   Int       @default(0) @map("total_users")
+  sentCount    Int       @default(0) @map("sent_count")
+  failedCount  Int       @default(0) @map("failed_count")
+  filters      Json      @default("{}")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  bot   Bot            @relation(fields: [botId], references: [id], onDelete: Cascade)
+  logs  BroadcastLog[]
+
+  @@index([botId])
+  @@index([ownerId])
+  @@index([status])
+  @@index([templateId])
+  @@map("broadcasts")
+}
+
+model BroadcastLog {
+  id            Int       @id @default(autoincrement())
+  broadcastId   Int       @map("broadcast_id")
+  telegramUserId BigInt   @map("telegram_user_id")
+  messageId     Int?      @map("message_id")
+  success       Boolean   @default(false)
+  errorMessage  String?   @map("error_message") @db.Text
+  sentAt        DateTime  @default(now()) @map("sent_at") @db.Timestamptz(6)
+
+  broadcast Broadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+
+  @@index([broadcastId])
+  @@index([telegramUserId])
+  @@index([messageId])
+  @@map("broadcast_logs")
+}
+
+model Trigger {
+  id            Int       @id @default(autoincrement())
+  botId         Int       @map("bot_id")
+  name          String    @db.VarChar
+  eventType     String    @map("event_type") @db.VarChar
+  conditions    Json      @default("{}")
+  actions       Json      @default("[]")
+  actionType    String?   @map("action_type") @db.VarChar
+  actionData    Json?     @map("action_data")
+  isActive      Boolean   @default(true) @map("is_active")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime? @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  bot Bot @relation(fields: [botId], references: [id], onDelete: Cascade)
+
+  @@index([botId])
+  @@map("triggers")
+}
+
+model ReferralLink {
+  id        Int       @id @default(autoincrement())
+  botId     Int       @map("bot_id")
+  source    String    @db.VarChar
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime? @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  bot Bot @relation(fields: [botId], references: [id], onDelete: Cascade)
+
+  @@unique([botId, source])
+  @@index([botId])
+  @@index([source])
+  @@map("referral_links")
+}

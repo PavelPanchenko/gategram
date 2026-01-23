@@ -1,6 +1,6 @@
 // Используем переменную окружения везде (клиент и сервер)
 // NEXT_PUBLIC_* переменные доступны и на клиенте, и на сервере в Next.js
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api'
 
 // API URL конфигурация
 // В случае проблем с подключением проверьте NEXT_PUBLIC_API_URL в frontend/.env.local
@@ -230,18 +230,38 @@ class ApiClient {
     this.baseUrl = baseUrl
   }
 
+  private isDev() {
+    return process.env.NODE_ENV !== 'production'
+  }
+
   private async request<T>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
     let token = this.getToken()
     
-    // Проверяем истечение токена перед запросом
+    // Проверяем истечение токена перед запросом (с запасом в 5 минут)
     if (token && isTokenExpired(token)) {
       // Пытаемся обновить токен
       token = await refreshAccessToken()
       if (!token) {
         throw new Error('Session expired')
+      }
+    } else if (token) {
+      // Проверяем, не истекает ли токен скоро (в течение 5 минут)
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]))
+        const exp = payload.exp * 1000
+        const timeUntilExpiry = exp - Date.now()
+        // Если токен истечет в течение 5 минут, обновляем его заранее
+        if (timeUntilExpiry < 5 * 60 * 1000 && timeUntilExpiry > 0) {
+          const newToken = await refreshAccessToken()
+          if (newToken) {
+            token = newToken
+          }
+        }
+      } catch {
+        // Если не удалось проверить, продолжаем с текущим токеном
       }
     }
 
@@ -259,6 +279,21 @@ class ApiClient {
     }
 
     const url = `${this.baseUrl}${endpoint}`
+
+    // Логируем для DELETE запросов с delete_messages
+    if (this.isDev() && options.method === 'DELETE' && endpoint.includes('broadcasts')) {
+      const hasDeleteMessages = headers['X-Delete-Messages'] === 'true' || 
+                                (typeof options.body === 'string' && options.body.includes('delete_messages'));
+      console.log('[Frontend API] DELETE request details:', { 
+        url, 
+        method: options.method,
+        headers: JSON.stringify(headers),
+        body: options.body,
+        bodyType: typeof options.body,
+        hasDeleteMessages,
+        'X-Delete-Messages header': headers['X-Delete-Messages'],
+      });
+    }
 
     const response = await fetch(url, {
       ...options,
@@ -609,9 +644,32 @@ class ApiClient {
     })
   }
 
-  async deleteBroadcast(broadcastId: number): Promise<void> {
-    return this.request<void>(`/broadcasts/${broadcastId}`, {
+  async deleteBroadcast(broadcastId: number, deleteMessages: boolean = false): Promise<void> {
+    const url = `/broadcasts/${broadcastId}`
+    console.log('[Frontend API] deleteBroadcast called with:', { broadcastId, deleteMessages, url })
+    
+    // Отправляем параметр через заголовок (наиболее надежный способ для DELETE)
+    const headers: Record<string, string> = {}
+    
+    if (deleteMessages) {
+      // Отправляем через заголовок (приоритетный способ)
+      headers['X-Delete-Messages'] = 'true'
+      // Также отправляем через body для совместимости
+      const body = JSON.stringify({ delete_messages: true })
+      console.log('[Frontend API] Sending delete_messages via header and body:', { 
+        header: headers['X-Delete-Messages'],
+        body 
+      })
+      return this.request<void>(url, {
+        method: 'DELETE',
+        headers,
+        body,
+      })
+    }
+    
+    return this.request<void>(url, {
       method: 'DELETE',
+      headers,
     })
   }
 
@@ -849,6 +907,34 @@ class ApiClient {
 
   async compareBots(): Promise<BotComparison[]> {
     return this.request<BotComparison[]>('/analytics/bots/comparison')
+  }
+
+  // Удобные методы для HTTP запросов
+  async get<T = any>(endpoint: string): Promise<{ data: T }> {
+    const data = await this.request<T>(endpoint)
+    return { data }
+  }
+
+  async post<T = any>(endpoint: string, body?: any): Promise<{ data: T }> {
+    const data = await this.request<T>(endpoint, {
+      method: 'POST',
+      body: body ? JSON.stringify(body) : undefined,
+    })
+    return { data }
+  }
+
+  async put<T = any>(endpoint: string, body?: any): Promise<{ data: T }> {
+    const data = await this.request<T>(endpoint, {
+      method: 'PUT',
+      body: body ? JSON.stringify(body) : undefined,
+    })
+    return { data }
+  }
+
+  async delete<T = any>(endpoint: string): Promise<void> {
+    await this.request<T>(endpoint, {
+      method: 'DELETE',
+    })
   }
 }
 

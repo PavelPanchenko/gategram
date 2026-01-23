@@ -26,14 +26,20 @@ export default function BroadcastsPage() {
     isOpen: boolean
     title: string
     message: string
-    onConfirm: () => void
     confirmText?: string
+    showDeleteMessages?: boolean
+    action?: 'cancel' | 'delete' | null
+    broadcastId?: number | null
   }>({
     isOpen: false,
     title: '',
     message: '',
-    onConfirm: () => {},
+    showDeleteMessages: false,
+    action: null,
+    broadcastId: null,
   })
+  
+  const [deleteMessages, setDeleteMessages] = useState(false)
 
   const handleCancel = async (broadcastId: number) => {
     setConfirmModal({
@@ -41,34 +47,52 @@ export default function BroadcastsPage() {
       title: 'Отменить рассылку',
       message: 'Вы уверены, что хотите отменить эту рассылку?',
       confirmText: 'Отменить',
-      onConfirm: async () => {
-        setConfirmModal({ ...confirmModal, isOpen: false })
-        try {
-          await cancelBroadcast.mutateAsync(broadcastId)
-          showToast.success('Рассылка отменена')
-        } catch (err: any) {
-          showToast.error(err.message || 'Ошибка отмены рассылки')
-        }
-      },
+      showDeleteMessages: false,
+      action: 'cancel',
+      broadcastId,
     })
   }
 
   const handleDelete = async (broadcastId: number) => {
+    setDeleteMessages(false) // Сбрасываем чекбокс
     setConfirmModal({
       isOpen: true,
       title: 'Удалить рассылку',
       message: 'Вы уверены, что хотите удалить эту рассылку? Это действие нельзя отменить.',
       confirmText: 'Удалить',
-      onConfirm: async () => {
-        setConfirmModal({ ...confirmModal, isOpen: false })
-        try {
-          await deleteBroadcast.mutateAsync(broadcastId)
-          showToast.success('Рассылка удалена')
-        } catch (err: any) {
-          showToast.error(err.message || 'Ошибка удаления рассылки')
-        }
-      },
+      showDeleteMessages: true,
+      action: 'delete',
+      broadcastId,
     })
+  }
+
+  const handleConfirm = async () => {
+    const action = confirmModal.action
+    const broadcastId = confirmModal.broadcastId
+
+    setConfirmModal((prev) => ({ ...prev, isOpen: false }))
+
+    if (!action || !broadcastId) return
+
+    try {
+      if (action === 'cancel') {
+        await cancelBroadcast.mutateAsync(broadcastId)
+        showToast.success('Рассылка отменена')
+        return
+      }
+
+      // action === 'delete'
+      const shouldDeleteMessages = deleteMessages
+      console.log('[Frontend] Deleting broadcast', broadcastId, 'with deleteMessages:', shouldDeleteMessages)
+      await deleteBroadcast.mutateAsync({
+        broadcastId,
+        deleteMessages: shouldDeleteMessages,
+      })
+      showToast.success('Рассылка удалена' + (shouldDeleteMessages ? ' вместе с сообщениями' : ''))
+      setDeleteMessages(false)
+    } catch (err: any) {
+      showToast.error(err.message || 'Ошибка операции')
+    }
   }
 
   const getStatusBadge = (status: string, scheduledAt?: string | null) => {
@@ -281,11 +305,29 @@ export default function BroadcastsPage() {
         isOpen={confirmModal.isOpen}
         title={confirmModal.title}
         message={confirmModal.message}
-        onConfirm={confirmModal.onConfirm}
-        onCancel={() => setConfirmModal({ ...confirmModal, isOpen: false })}
+        onConfirm={handleConfirm}
+        onCancel={() => {
+          setConfirmModal((prev) => ({ ...prev, isOpen: false }))
+          setDeleteMessages(false)
+        }}
         confirmText={confirmModal.confirmText}
         confirmButtonClass="bg-red-600 hover:bg-red-700"
-      />
+      >
+        {confirmModal.showDeleteMessages && (
+          <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-md border border-gray-200">
+            <input
+              type="checkbox"
+              id="delete-messages"
+              checked={deleteMessages}
+              onChange={(e) => setDeleteMessages(e.target.checked)}
+              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+            />
+            <label htmlFor="delete-messages" className="text-sm text-gray-700 cursor-pointer">
+              Удалить также сообщения из бота у всех пользователей
+            </label>
+          </div>
+        )}
+      </ConfirmModal>
     </div>
     </DashboardLayout>
   )

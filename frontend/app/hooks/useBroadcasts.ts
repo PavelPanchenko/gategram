@@ -75,7 +75,8 @@ export function useDeleteBroadcast() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (broadcastId: number) => api.deleteBroadcast(broadcastId),
+    mutationFn: ({ broadcastId, deleteMessages }: { broadcastId: number; deleteMessages?: boolean }) => 
+      api.deleteBroadcast(broadcastId, deleteMessages || false),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['broadcasts'] })
     },

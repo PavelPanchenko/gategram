@@ -52,28 +52,13 @@
 ### Backend оптимизация
 
 1. **Пагинация**
-   ```python
-   # Добавить пагинацию для больших списков
-   @router.get("/users")
-   def get_users(page: int = 1, limit: int = 50):
-       offset = (page - 1) * limit
-       return db.query(User).offset(offset).limit(limit).all()
-   ```
+   - Добавить пагинацию для больших списков на API (Node.js/Express) с `skip/limit` и индексами в Postgres.
 
 2. **Индексы БД**
-   ```python
-   # Добавить индексы для часто используемых полей
-   Index('idx_telegram_user_bot', TelegramUser.bot_id, TelegramUser.telegram_user_id)
-   Index('idx_broadcast_status', Broadcast.status, Broadcast.scheduled_at)
-   ```
+   - Добавить/проверить индексы для часто используемых полей (например, `(bot_id, telegram_user_id)`, `status`, `scheduled_at`).
 
 3. **Кеширование Redis**
-   ```python
-   # Кешировать статистику дашборда
-   @cache(ttl=300)  # 5 минут
-   def get_analytics_overview():
-       ...
-   ```
+   - Кешировать тяжелые агрегаты аналитики на короткое время (например, 60–300 секунд) в Redis.
 
 ### Frontend оптимизация
 

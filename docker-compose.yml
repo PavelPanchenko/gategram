@@ -1,4 +1,4 @@
-# Все переменные окружения для бэкенда, БД и Celery читаются из backend/.env
+# Все переменные окружения читаются из .env в корне проекта
 # Переменные для фронтенда читаются из frontend/.env.local
 
 services:
@@ -6,7 +6,7 @@ services:
     image: postgres:16-alpine
     container_name: gategram_postgres
     env_file:
-      - backend/.env
+      - ./.env
     # Переменные POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB передаются через env_file
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -31,24 +31,29 @@ services:
       timeout: 5s
       retries: 5
 
-  backend:
+  backend-node:
     build:
-      context: ./backend
+      context: ./backend-node
       dockerfile: Dockerfile
-    container_name: gategram_backend
+    container_name: gategram_backend_node
     env_file:
-      - backend/.env
-    # Все переменные читаются из backend/.env через env_file
+      - ./.env
+    # Все переменные читаются из .env через env_file
+    environment:
+      - PORT=8001
+      - NODE_ENV=production
+      # В контейнере имя хоста Redis = "redis"
+      - REDIS_URL=redis://redis:6379/0
     volumes:
-      - ./backend:/app
+      - backend_media:/app/media
     ports:
-      - "8000:8000"
+      - "8001:8001"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    command: sh -c "npm run build && npm start"
 
   frontend:
     build:
@@ -57,50 +62,18 @@ services:
       # Переменные читаются из frontend/.env.local, который копируется в контейнер
     container_name: gategram_frontend
     volumes:
-      - ./frontend:/app
       - /app/node_modules
       - /app/.next
     ports:
       - "3000:3000"
     depends_on:
-      - backend
-    command: sh -c "npm install && npm run dev"
-
-  celery:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: gategram_celery
-    env_file:
-      - backend/.env
-    # Переменные читаются из backend/.env через env_file
-    volumes:
-      - ./backend:/app
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    command: celery -A app.celery_app worker --loglevel=info
-
-  celery-beat:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: gategram_celery_beat
-    env_file:
-      - backend/.env
-    # Переменные читаются из backend/.env через env_file
-    volumes:
-      - ./backend:/app
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    command: celery -A app.celery_app beat --loglevel=info
+      - backend-node
+    environment:
+      - NODE_ENV=production
+    command: sh -c "npm run build && npm start"
 
 volumes:
   postgres_data:
   redis_data:
+  backend_media:
 

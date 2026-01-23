@@ -2,8 +2,8 @@
 
 > Профессиональная SaaS платформа для управления Telegram ботами, автоматизации рассылок и отслеживания трафика
 
-[![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-green.svg)](https://fastapi.tiangolo.com/)
+[![Node.js](https://img.shields.io/badge/Node.js-API-green.svg)](https://nodejs.org/)
+[![Prisma](https://img.shields.io/badge/Prisma-ORM-blue.svg)](https://www.prisma.io/)
 [![Next.js](https://img.shields.io/badge/Next.js-14+-black.svg)](https://nextjs.org/)
 [![License](https://img.shields.io/badge/License-Proprietary-red.svg)](LICENSE)
 
@@ -139,14 +139,13 @@ GateGram — это комплексная платформа для управ�
   - React Hook Form + Zod
 
 - **Backend**: 
-  - FastAPI 0.109+
-  - Python 3.12+
-  - SQLAlchemy 2.0 (ORM)
-  - Alembic (миграции БД)
+  - Node.js + Express
+  - TypeScript
+  - Prisma (ORM)
   - PostgreSQL 16 (база данных)
   - Redis 7 (очереди и кэш)
-  - Celery 5.3 (фоновые задачи)
-  - aiogram 3.3 (Telegram Bot API)
+  - BullMQ (очереди/фоновые задачи)
+  - grammY (Telegram Bot API)
 
 - **Infrastructure**: 
   - Docker & Docker Compose
@@ -154,67 +153,20 @@ GateGram — это комплексная платформа для управ�
 
 ### Компоненты системы
 
-1. **API Server** (FastAPI) — REST API для фронтенда
-2. **Celery Worker** — обработка фоновых задач (рассылки, триггеры)
-3. **Celery Beat** — планировщик задач (проверка неактивных пользователей, очистка файлов)
-4. **Bot Manager** — управление жизненным циклом Telegram ботов
-5. **PostgreSQL** — основное хранилище данных
-6. **Redis** — брокер сообщений для Celery и кэш
+1. **API Server** (Node.js/Express) — REST API для фронтенда
+2. **Queue/Workers** (BullMQ) — обработка фоновых задач (рассылки и т.п.)
+3. **Bot Manager** — управление жизненным циклом Telegram ботов
+4. **PostgreSQL** — основное хранилище данных
+5. **Redis** — очередь/кэш
 
 ## Структура проекта
 
 ```
 GateGram/
-├── backend/                    # Backend приложение (FastAPI)
-│   ├── app/
-│   │   ├── api/                # API роутеры
-│   │   │   ├── auth.py         # Аутентификация
-│   │   │   ├── bots.py          # Управление ботами
-│   │   │   ├── broadcasts.py    # Рассылки
-│   │   │   ├── analytics.py     # Аналитика
-│   │   │   ├── message_templates.py  # Шаблоны сообщений
-│   │   │   ├── user_tags.py     # Теги пользователей
-│   │   │   ├── triggers.py       # Триггеры
-│   │   │   └── global_*.py      # Глобальные ресурсы
-│   │   ├── core/                # Ядро приложения
-│   │   │   ├── config.py        # Конфигурация
-│   │   │   └── database.py      # Подключение к БД
-│   │   ├── models/              # SQLAlchemy модели
-│   │   │   ├── user.py          # Пользователи системы
-│   │   │   ├── bot.py           # Telegram боты
-│   │   │   ├── telegram_user.py # Пользователи ботов
-│   │   │   ├── broadcast.py     # Рассылки
-│   │   │   ├── message_template.py  # Шаблоны
-│   │   │   ├── user_tag.py      # Теги
-│   │   │   ├── trigger.py       # Триггеры
-│   │   │   └── traffic_source.py # Источники трафика
-│   │   ├── schemas/             # Pydantic схемы
-│   │   ├── services/            # Бизнес-логика
-│   │   │   ├── bot_manager.py   # Управление ботами
-│   │   │   ├── bot_handlers.py  # Обработчики ботов
-│   │   │   └── trigger_processor.py  # Обработка триггеров
-│   │   ├── tasks/               # Celery задачи
-│   │   │   ├── broadcast_tasks.py  # Задачи рассылок
-│   │   │   └── trigger_tasks.py    # Задачи триггеров
-│   │   ├── utils/               # Утилиты
-│   │   │   ├── jwt.py           # JWT токены
-│   │   │   ├── password.py      # Хеширование паролей
-│   │   │   ├── telegram.py      # Telegram утилиты
-│   │   │   ├── template_processor.py  # Обработка шаблонов
-│   │   │   └── broadcast_filters.py   # Фильтры рассылок
-│   │   ├── celery_app.py        # Конфигурация Celery
-│   │   └── main.py              # Точка входа FastAPI
-│   ├── alembic/                 # Миграции БД
-│   │   ├── versions/            # Файлы миграций
-│   │   └── env.py               # Конфигурация Alembic
-│   ├── media/                   # Медиа файлы
-│   │   ├── broadcasts/          # Файлы рассылок
-│   │   └── temp/                # Временные файлы
-│   ├── alembic.ini              # Конфигурация Alembic
-│   ├── requirements.txt         # Python зависимости
-│   ├── pyproject.toml           # Python проект
-│   ├── Dockerfile               # Docker образ
-│   └── README.md                # Документация бэкенда
+├── backend-node/                # Backend приложение (Node.js/Express)
+│   ├── prisma/                  # Prisma schema
+│   ├── src/                     # API + workers + bot manager
+│   └── media/                   # Медиа файлы рассылок (временное хранение до отправки)
 │
 ├── frontend/                    # Frontend приложение (Next.js)
 │   ├── app/                     # Next.js App Router
@@ -248,7 +200,7 @@ GateGram/
 
 ### Для локальной разработки
 
-- **Python** 3.12+
+- **Node.js** 18+
 - **Node.js** 20+
 - **PostgreSQL** 16+ (или Docker)
 - **Redis** 7+ (или Docker)
@@ -266,9 +218,9 @@ cd GateGram
 
 2. **Создайте файлы с переменными окружения:**
 
-**Важно**: Все сервисы (backend, celery, postgres) используют `backend/.env`, фронтенд использует `frontend/.env.local`.
+**Важно**: Все сервисы (postgres, backend-node) используют `.env` в корне проекта, фронтенд использует `frontend/.env.local`.
 
-Создайте файл `backend/.env`:
+Создайте файл `.env` в корне проекта:
 
 ```bash
 # Database - укажите либо DATABASE_URL, либо компоненты
@@ -300,16 +252,16 @@ TELEGRAM_API_URL=https://api.telegram.org
 
 **Важно**: 
 - Замените `POSTGRES_PASSWORD` и `SECRET_KEY` на безопасные значения
-- `SECRET_KEY` минимум 32 символа, можно сгенерировать: `python -c "import secrets; print(secrets.token_urlsafe(32))"`
+- `SECRET_KEY` минимум 32 символа, можно сгенерировать: `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`
 
 Создайте файл `frontend/.env.local`:
 
 ```bash
 # API URL (обязательно)
-NEXT_PUBLIC_API_URL=http://localhost:8000/api
+NEXT_PUBLIC_API_URL=http://localhost:8001/api
 
 # Для production используйте URL вашего сервера:
-# NEXT_PUBLIC_API_URL=http://your-domain.com:8000/api
+# NEXT_PUBLIC_API_URL=http://your-domain.com:8001/api
 ```
 
 
@@ -322,15 +274,13 @@ docker compose up -d
 Эта команда запустит:
 - PostgreSQL (порт 5432)
 - Redis (порт 6379)
-- Backend API (порт 8000)
+- Backend API (Node.js, порт 8001)
 - Frontend (порт 3000)
-- Celery Worker
-- Celery Beat
 
-5. **Примените миграции базы данных:**
+5. **Примените схему БД (Prisma):**
 
 ```bash
-docker compose exec backend alembic upgrade head
+docker compose exec backend-node npx prisma db push
 ```
 
 6. **Проверьте статус сервисов:**
@@ -344,32 +294,11 @@ docker compose ps
 7. **Откройте в браузере:**
 
 - **Frontend**: http://localhost:3000
-- **Backend API**: http://localhost:8000
-- **API Документация (Swagger)**: http://localhost:8000/docs
-- **API Документация (ReDoc)**: http://localhost:8000/redoc
+- **Backend API**: http://localhost:8001
 
 8. **Создайте первого пользователя:**
 
-Используйте API для регистрации или создайте через Python:
-
-```bash
-docker compose exec backend python -c "
-from app.core.database import SessionLocal
-from app.models.user import User
-from app.utils.password import get_password_hash
-
-db = SessionLocal()
-user = User(
-    email='admin@example.com',
-    hashed_password=get_password_hash('your-password'),
-    is_active=True
-)
-db.add(user)
-db.commit()
-print('User created:', user.email)
-db.close()
-"
-```
+Используйте страницу регистрации в UI или `POST /api/auth/register`.
 
 ### Вариант 2: Локальная разработка
 
@@ -378,15 +307,13 @@ db.close()
 1. **Установите зависимости:**
 
 ```bash
-cd backend
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-pip install -r requirements.txt
+cd backend-node
+npm install
 ```
 
 2. **Настройте переменные окружения:**
 
-Создайте файл `backend/.env`:
+Создайте файл `.env` в корне проекта:
 
 ```bash
 DATABASE_URL=postgresql://gategram:gategram@localhost:5432/gategram
@@ -405,25 +332,13 @@ CORS_ORIGINS=http://localhost:3000
 4. **Примените миграции:**
 
 ```bash
-alembic upgrade head
+npx prisma db push
 ```
 
 5. **Запустите сервер:**
 
 ```bash
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-6. **В отдельном терминале запустите Celery Worker:**
-
-```bash
-celery -A app.celery_app worker --loglevel=info
-```
-
-7. **В еще одном терминале запустите Celery Beat:**
-
-```bash
-celery -A app.celery_app beat --loglevel=info
+npm run dev
 ```
 
 #### Frontend
@@ -438,7 +353,7 @@ npm install
 2. **Создайте файл `.env.local`:**
 
 ```bash
-NEXT_PUBLIC_API_URL=http://localhost:8000/api
+NEXT_PUBLIC_API_URL=http://localhost:8001/api
 ```
 
 3. **Запустите dev сервер:**
@@ -451,10 +366,10 @@ Frontend будет доступен на http://localhost:3000
 
 ## Переменные окружения
 
-Все переменные для бэкенда, Celery и PostgreSQL должны быть в `backend/.env`.  
+Все переменные для бэкенда (Node.js) и PostgreSQL должны быть в `.env` в корне проекта.  
 Все переменные для фронтенда должны быть в `frontend/.env.local`.
 
-### Backend (backend/.env)
+### Backend (.env)
 
 | Переменная | Описание | Значение по умолчанию | Обязательно |
 |-----------|----------|----------------------|-------------|
@@ -479,7 +394,7 @@ Frontend будет доступен на http://localhost:3000
 
 | Переменная | Описание | Значение по умолчанию | Обязательно |
 |-----------|----------|----------------------|-------------|
-| `NEXT_PUBLIC_API_URL` | URL бэкенд API (с /api) | `http://localhost:8000/api` | Да |
+| `NEXT_PUBLIC_API_URL` | URL бэкенд API (с /api) | `http://localhost:8001/api` | Да |
 
 ## Модели базы данных
 
@@ -514,10 +429,7 @@ Frontend будет доступен на http://localhost:3000
 
 ## API Endpoints
 
-API использует REST архитектуру и JWT аутентификацию. Полная документация доступна после запуска бэкенда:
-
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
+API использует REST архитектуру и JWT аутентификацию.
 
 ### Основные группы эндпоинтов
 
@@ -556,42 +468,21 @@ GET /health/ping
 
 Все эндпоинты (кроме `/api/auth/login`, `/api/auth/register` и `/health/*`) требуют аутентификации через JWT токен.
 
-## Фоновые задачи (Celery)
+## Фоновые задачи (BullMQ)
 
-### Задачи рассылок
+BullMQ воркеры (через Redis) обрабатывают:
 
-- **`send_broadcast`** — Отправка рассылки пользователям
-  - Rate limiting: 30 сообщений в секунду (лимит Telegram)
-  - Поддержка медиа-файлов (фото, видео, аудио, документы)
-  - Поддержка медиа-групп (до 10 файлов)
-  - Автоматическое удаление медиа-файлов после отправки
-
-### Задачи триггеров
-
-- **`check_inactive_users_task`** — Проверка неактивных пользователей (запускается каждый день в 10:00 UTC)
-  - Проверяет пользователей для каждого активного триггера типа "user_inactive"
-  - Период неактивности настраивается индивидуально для каждого триггера (7, 14, 30 или 90 дней)
-- **`process_trigger_task`** — Обработка триггера
-
-### Планировщик (Celery Beat)
-
-- **`check-inactive-users`** — Каждый день в 10:00 UTC проверяет неактивных пользователей
-- **`check-scheduled-broadcasts`** — Каждую минуту проверяет запланированные рассылки
-- **`cleanup-old-media-files`** — Каждый день в 2:00 UTC удаляет старые медиа-файлы (старше 30 дней)
+- Отправку рассылок батчами + rate limiting
+- Запланированные рассылки (проверка и постановка в очередь)
+- Очистку медиа-файлов после `completed/failed/cancelled/delete`
 
 ## Разработка
 
-### Создание миграций БД
+### Схема БД (Prisma)
 
 ```bash
-# Создать новую миграцию
-docker compose exec backend alembic revision --autogenerate -m "описание изменений"
-
-# Применить миграции
-docker compose exec backend alembic upgrade head
-
-# Откатить последнюю миграцию
-docker compose exec backend alembic downgrade -1
+# Применить схему к БД
+docker compose exec backend-node npx prisma db push
 ```
 
 ### Логи
@@ -605,9 +496,8 @@ docker compose logs -f
 Логи конкретного сервиса:
 
 ```bash
-docker compose logs -f backend
-docker compose logs -f celery
-docker compose logs -f celery-beat
+docker compose logs -f backend-node
+docker compose logs -f frontend
 ```
 
 ### Остановка сервисов
@@ -678,8 +568,10 @@ curl https://yourdomain.com/health
 6. **Масштабирование:**
 
 ```bash
-# Увеличить количество Celery workers
-docker compose up -d --scale celery=3
+# Масштабирование сервисов через Docker Compose (при необходимости)
+# Важно: при масштабировании backend-node убедитесь, что очереди/воркеры настроены так,
+# чтобы не было дублей обработки задач.
+docker compose up -d --scale backend-node=1
 ```
 
 ### Рекомендации по безопасности
@@ -729,8 +621,8 @@ docker compose ps postgres
 # Проверьте логи
 docker compose logs postgres
 
-# Проверьте подключение
-docker compose exec backend python -c "from app.core.database import engine; engine.connect()"
+# Проверьте health бэкенда
+curl http://localhost:8001/health
 ```
 
 ### Проблема: Redis не подключается
@@ -746,34 +638,15 @@ docker compose exec redis redis-cli ping
 ### Проблема: Миграции не применяются
 
 ```bash
-# Проверьте текущую версию
-docker compose exec backend alembic current
-
-# Просмотрите историю миграций
-docker compose exec backend alembic history
-
-# Примените миграции вручную
-docker compose exec backend alembic upgrade head
-```
-
-### Проблема: Celery задачи не выполняются
-
-```bash
-# Проверьте статус Celery Worker
-docker compose ps celery
-
-# Проверьте логи
-docker compose logs -f celery
-
-# Проверьте подключение к Redis
-docker compose exec celery python -c "from app.core.config import settings; import redis; r = redis.from_url(settings.REDIS_URL); r.ping()"
+# Примените схему Prisma
+docker compose exec backend-node npx prisma db push
 ```
 
 ### Проблема: Боты не запускаются
 
 ```bash
 # Проверьте логи бэкенда
-docker compose logs -f backend
+docker compose logs -f backend-node
 
 # Проверьте, что токены ботов валидны
 # Проверьте, что боты активны в БД
@@ -783,10 +656,10 @@ docker compose logs -f backend
 
 ```bash
 # Проверьте права доступа к папке media
-docker compose exec backend ls -la /app/media/broadcasts
+docker compose exec backend-node ls -la /app/media/broadcasts
 
 # Проверьте, что папка существует
-docker compose exec backend mkdir -p /app/media/broadcasts
+docker compose exec backend-node mkdir -p /app/media/broadcasts
 ```
 
 ## Производительность
@@ -796,8 +669,7 @@ docker compose exec backend mkdir -p /app/media/broadcasts
 1. **Рассылки:**
    - Используются батчи по 30 сообщений с задержкой 1 секунда между батчами
    - Автоматическое соблюдение лимитов Telegram API
-   - Параллельная обработка через Celery workers
-   - Масштабирование: увеличьте количество workers для больших рассылок
+   - Обработка очередей через BullMQ воркеры
 
 2. **База данных:**
    - Настройте connection pooling: `?pool_size=10&max_overflow=20`
@@ -806,32 +678,23 @@ docker compose exec backend mkdir -p /app/media/broadcasts
    - Мониторьте медленные запросы
 
 3. **Redis:**
-   - Используется для очередей Celery
+   - Используется для очередей BullMQ
    - Можно использовать для кэширования часто запрашиваемых данных
    - Настройте `maxmemory-policy` для production
 
 4. **Медиа файлы:**
-   - Автоматическая очистка старых файлов (Celery Beat задача)
-   - Для production рассмотрите S3/MinIO для хранения
+   - Автоматическая очистка медиа после `completed/failed/cancelled/delete`
+   - Для production можно рассмотреть S3/MinIO для хранения scheduled-рассылок
    - Настройте CDN для быстрой доставки
 
 5. **Мониторинг производительности:**
    ```bash
    # Проверка здоровья системы
-   curl http://localhost:8000/health
-   
-   # Мониторинг Celery
-   celery -A app.celery_app inspect active
-   celery -A app.celery_app inspect stats
+   curl http://localhost:8001/health
    ```
 
 6. **Масштабирование:**
-   ```bash
-   # Горизонтальное масштабирование Celery workers
-   docker compose up -d --scale celery=5
-   
-   # Для очень больших нагрузок используйте отдельные workers для разных задач
-   ```
+   - Для больших рассылок корректнее увеличивать пропускную способность очередей/воркеров (BullMQ) и следить за rate limit Telegram.
 
 ## Лицензия
 

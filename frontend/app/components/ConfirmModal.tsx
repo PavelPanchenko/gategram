@@ -12,6 +12,7 @@ interface ConfirmModalProps {
   confirmText?: string
   cancelText?: string
   confirmButtonClass?: string
+  children?: React.ReactNode
 }
 
 export default function ConfirmModal({
@@ -23,6 +24,7 @@ export default function ConfirmModal({
   confirmText = 'Подтвердить',
   cancelText = 'Отмена',
   confirmButtonClass = 'bg-red-600 hover:bg-red-700',
+  children,
 }: ConfirmModalProps) {
   if (!isOpen) return null
 
@@ -50,9 +52,16 @@ export default function ConfirmModal({
             <h3 className="text-lg font-semibold text-gray-900 mb-2">
               {title}
             </h3>
-            <p className="text-sm text-gray-600 mb-6">
+            <p className="text-sm text-gray-600 mb-4">
               {message}
             </p>
+
+            {/* Additional content (e.g., checkboxes) */}
+            {children && (
+              <div className="mb-6">
+                {children}
+              </div>
+            )}
 
             {/* Buttons */}
             <div className="flex justify-end gap-3">

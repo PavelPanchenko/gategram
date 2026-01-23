@@ -1,0 +1,632 @@
+/**
+ * Обработчики для Telegram ботов
+ */
+
+import { Bot, Context, InlineKeyboard } from 'grammy';
+import prisma from '../core/database';
+import { processTriggerEvent, TriggerEvent } from '../utils/triggerProcessor';
+import { processTemplate } from '../utils/templateProcessor';
+import { botManager } from './botManager';
+
+// Глобальный словарь для отслеживания обрабатываемых команд /start
+// Ключ: `${botId}_${userId}`, Значение: timestamp последней обработки
+const processingStartCommands: Map<string, number> = new Map();
+const START_COMMAND_COOLDOWN = 3000; // 3 секунды в миллисекундах
+
+// Периодически очищаем старые записи
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, timestamp] of processingStartCommands.entries()) {
+    if (now - timestamp > START_COMMAND_COOLDOWN * 2) {
+      processingStartCommands.delete(key);
+    }
+  }
+}, 60000); // Проверяем каждую минуту
+
+/**
+ * Настраивает обработчики для конкретного бота
+ */
+export function setupBotHandlers(bot: Bot, botId: number): void {
+  // Обработчик команды /start
+  bot.command('start', async (ctx: Context) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+
+    const commandKey = `${botId}_${userId}`;
+    const now = Date.now();
+
+    // Проверяем антифлуд
+    if (processingStartCommands.has(commandKey)) {
+      const lastProcessed = processingStartCommands.get(commandKey)!;
+      const timeDiff = now - lastProcessed;
+      if (timeDiff < START_COMMAND_COOLDOWN) {
+        console.log(
+          `Ignoring duplicate /start from user ${userId} for bot ${botId} (last processed ${timeDiff}ms ago)`
+        );
+        return;
+      }
+    }
+
+    // Помечаем, что обрабатываем этот запрос
+    processingStartCommands.set(commandKey, now);
+
+    try {
+      // Получаем бота из БД
+      const botData = await prisma.bot.findUnique({
+        where: { id: botId },
+      });
+
+      if (!botData) {
+        await ctx.reply('Бот не найден');
+        return;
+      }
+
+      // Проверяем, что бот активен
+      if (!botData.isActive) {
+        await ctx.reply('Бот временно недоступен');
+        return;
+      }
+
+      const username = ctx.from.username || null;
+      const firstName = ctx.from.first_name || null;
+      const lastName = ctx.from.last_name || null;
+
+      // Извлекаем source из параметров команды /start
+      let source: string | null = null;
+      if (ctx.message?.text) {
+        const parts = ctx.message.text.split(' ');
+        console.log(`[Bot ${botId}] /start command text: "${ctx.message.text}", parts:`, parts);
+        
+        if (parts.length > 1) {
+          // Берем первый параметр после /start
+          // Декодируем URL-кодирование, если есть
+          try {
+            source = decodeURIComponent(parts[1]);
+            console.log(`[Bot ${botId}] Decoded source: "${source}"`);
+          } catch {
+            source = parts[1];
+            console.log(`[Bot ${botId}] Using raw source (decode failed): "${source}"`);
+          }
+          
+          // Обрабатываем случаи, когда Telegram веб-версия добавляет свои параметры
+          // Формат может быть: "tgchat_webkiev" (только системный) или "tgchat_webkiev_tg" (системный + пользовательский)
+          if (source.includes('_')) {
+            const sourceParts = source.split('_');
+            console.log(`[Bot ${botId}] Source contains underscore, parts:`, sourceParts);
+            
+            // Известные префиксы от веб-версии Telegram
+            const webPrefixes = ['tgchat', 'web', 'webkiev', 'android', 'ios'];
+            
+            // Если первая часть - это системный префикс Telegram
+            if (webPrefixes.includes(sourceParts[0])) {
+              console.log(`[Bot ${botId}] Found web prefix: "${sourceParts[0]}"`);
+              // Если есть еще части после префиксов - это пользовательский source
+              if (sourceParts.length > 2) {
+                // Берем все части после системных префиксов
+                // Например: "tgchat_webkiev_tg" -> "tg"
+                // Или: "web_instagram" -> "instagram"
+                source = sourceParts.slice(2).join('_');
+                console.log(`[Bot ${botId}] Extracted user source after web prefix: "${source}"`);
+              } else {
+                // Если только системные префиксы без пользовательского source - игнорируем
+                source = null;
+                console.log(`[Bot ${botId}] Only web prefix found, no user source, setting to null`);
+              }
+            } else {
+              console.log(`[Bot ${botId}] No web prefix found, keeping source as is: "${source}"`);
+            }
+            // Если это не системный префикс, оставляем как есть (например, "my_source_name")
+          } else {
+            console.log(`[Bot ${botId}] Source has no underscore, keeping as is: "${source}"`);
+          }
+        } else {
+          console.log(`[Bot ${botId}] No parameters in /start command`);
+        }
+      } else {
+        console.log(`[Bot ${botId}] No message text in /start command`);
+      }
+      
+      console.log(`[Bot ${botId}] Final extracted source: "${source}"`);
+
+      // Проверяем, существует ли пользователь
+      let telegramUser = await prisma.telegramUser.findFirst({
+        where: {
+          botId,
+          telegramUserId: BigInt(userId),
+        },
+      });
+
+      let isNewUser = false;
+      if (!telegramUser) {
+        // Создаем нового пользователя
+        isNewUser = true;
+        telegramUser = await prisma.telegramUser.create({
+          data: {
+            botId,
+            telegramUserId: BigInt(userId),
+            username,
+            firstName,
+            lastName,
+            source,
+            status: 'active',
+            joinedAt: new Date(),
+            lastActivity: new Date(),
+          },
+        });
+      } else {
+        // Обновляем информацию
+        // Если пришел source, обновляем его (даже если у пользователя уже был source)
+        // Это позволяет обновить source при повторном переходе по реферальной ссылке
+        const updateData: any = {
+          username,
+          firstName,
+          lastName,
+          lastActivity: new Date(),
+          ...(telegramUser.status === 'blocked' || telegramUser.status === 'left'
+            ? { status: 'active' }
+            : {}),
+        };
+        
+        // Обновляем source, если он был передан
+        if (source !== null) {
+          updateData.source = source;
+          console.log(`[Bot ${botId}] Updating user ${userId} source to: "${source}"`);
+        } else if (telegramUser.source === null) {
+          // Если source не передан, но у пользователя его нет, оставляем null
+          // (не перезаписываем существующий source на null)
+          console.log(`[Bot ${botId}] No source in request, keeping existing: "${telegramUser.source}"`);
+        }
+        
+        telegramUser = await prisma.telegramUser.update({
+          where: { id: telegramUser.id },
+          data: updateData,
+        });
+      }
+      
+      console.log(`[Bot ${botId}] User ${userId} source after update: "${telegramUser.source}"`);
+
+      // Обрабатываем триггеры для нового пользователя
+      if (isNewUser) {
+        await processTriggerEvent(TriggerEvent.USER_REGISTERED, botId, userId, {
+          source: source || 'unknown',
+        });
+      }
+
+      // Отправляем welcome message
+      let welcomeText = 'Добро пожаловать!';
+
+      // Проверяем, есть ли активный шаблон
+      const template = await prisma.messageTemplate.findFirst({
+        where: {
+          botId,
+          isActive: true,
+          name: {
+            contains: 'welcome',
+            mode: 'insensitive',
+          },
+        },
+      });
+
+      if (template) {
+        welcomeText = processTemplate(template.content, telegramUser, {
+          source: source || 'unknown',
+        });
+      } else if (botData.welcomeMessage) {
+        welcomeText = processTemplate(botData.welcomeMessage as string, telegramUser, {
+          source: source || 'unknown',
+        });
+      }
+
+      // Получаем список каналов
+      const channels = (botData.channels as Array<{ name: string; url: string }>) || [];
+      const channelLink = botData.channelLink as string | null;
+      if (channelLink && !channels.some((ch) => ch.url === channelLink)) {
+        channels.push({ name: 'Канал', url: channelLink });
+      }
+
+      // Логика отображения кнопок
+      if (botData.requiredInteraction && channels.length > 0) {
+        // Если требуется взаимодействие и есть каналы - показываем ТОЛЬКО кнопку "Продолжить"
+        const continueText = (botData.continueButtonText as string) || '✅ Продолжить';
+        const keyboard = new InlineKeyboard().text(continueText, 'continue');
+        await ctx.reply(welcomeText, { reply_markup: keyboard });
+      } else if (channels.length > 0) {
+        // Немедленный доступ к каналам (без кнопки "Продолжить")
+        const keyboard = new InlineKeyboard();
+        for (const channel of channels) {
+          keyboard.url(`📢 ${channel.name}`, channel.url).row();
+        }
+        await ctx.reply(welcomeText, { reply_markup: keyboard });
+      } else {
+        // Просто приветствие без каналов
+        await ctx.reply(welcomeText);
+      }
+    } catch (error) {
+      console.error(`Error in cmd_start for bot ${botId}:`, error);
+      try {
+        await ctx.reply('Произошла ошибка. Попробуйте позже.');
+      } catch (sendError) {
+        console.error(`Failed to send error message to user ${ctx.from?.id}:`, sendError);
+      }
+    }
+  });
+
+  // Обработчик кнопки 'Продолжить'
+  bot.callbackQuery('continue', async (ctx: Context) => {
+    try {
+      const botData = await prisma.bot.findUnique({
+        where: { id: botId },
+      });
+
+      if (!botData || !botData.isActive) {
+        await ctx.answerCallbackQuery({ text: 'Бот временно недоступен', show_alert: true });
+        return;
+      }
+
+      // Обновляем активность пользователя
+      const userId = ctx.from?.id;
+      if (userId) {
+        await prisma.telegramUser.updateMany({
+          where: {
+            botId,
+            telegramUserId: BigInt(userId),
+          },
+          data: {
+            lastActivity: new Date(),
+          },
+        });
+      }
+
+      // Удаляем сообщение с кнопкой "Продолжить"
+      try {
+        await ctx.deleteMessage();
+      } catch {
+        // Игнорируем ошибки удаления
+      }
+
+      // Если есть задержка, ждем
+      if (botData.interactionDelaySeconds > 0) {
+        await ctx.answerCallbackQuery('Обрабатываем запрос...');
+        await new Promise((resolve) =>
+          setTimeout(resolve, botData.interactionDelaySeconds * 1000)
+        );
+      } else {
+        await ctx.answerCallbackQuery();
+      }
+
+      // Получаем список каналов
+      const channels = (botData.channels as Array<{ name: string; url: string }>) || [];
+      const channelLink = botData.channelLink as string | null;
+      if (channelLink && !channels.some((ch) => ch.url === channelLink)) {
+        channels.push({ name: 'Канал', url: channelLink });
+      }
+
+      // Отправляем НОВОЕ сообщение со ссылками на каналы
+      if (channels.length > 0) {
+        const keyboard = new InlineKeyboard();
+        for (const channel of channels) {
+          keyboard.url(`📢 ${channel.name}`, channel.url).row();
+        }
+        await ctx.reply('Отлично! Вот ссылки на наши каналы:', { reply_markup: keyboard });
+      } else {
+        await ctx.reply('Спасибо за взаимодействие!');
+      }
+    } catch (error) {
+      console.error(`Error in process_continue for bot ${botId}:`, error);
+      await ctx.answerCallbackQuery({ text: 'Произошла ошибка', show_alert: true });
+    }
+  });
+
+  // Обработчик команды для показа каналов
+  bot.command(['channels', 'каналы', 'канал'], async (ctx: Context) => {
+    try {
+      const botData = await prisma.bot.findUnique({
+        where: { id: botId },
+      });
+
+      if (!botData || !botData.isActive) {
+        return;
+      }
+
+      // Получаем список каналов
+      const channels = (botData.channels as Array<{ name: string; url: string }>) || [];
+      const channelLink = botData.channelLink as string | null;
+      if (channelLink && !channels.some((ch) => ch.url === channelLink)) {
+        channels.push({ name: 'Канал', url: channelLink });
+      }
+
+      if (channels.length === 0) {
+        await ctx.reply('Каналы не настроены.');
+        return;
+      }
+
+      // Создаем клавиатуру с каналами
+      const keyboard = new InlineKeyboard();
+      for (const channel of channels) {
+        keyboard.url(`📢 ${channel.name}`, channel.url).row();
+      }
+
+      await ctx.reply('Выберите канал:', { reply_markup: keyboard });
+    } catch (error) {
+      console.error(`Error in cmd_channels for bot ${botId}:`, error);
+    }
+  });
+
+  // Обработчик всех остальных сообщений
+  bot.on('message', async (ctx: Context) => {
+    try {
+      const botData = await prisma.bot.findUnique({
+        where: { id: botId },
+      });
+
+      if (!botData || !botData.isActive) {
+        return;
+      }
+
+      const userId = ctx.from?.id;
+      if (!userId) return;
+
+      const username = ctx.from.username || null;
+      const firstName = ctx.from.first_name || null;
+      const lastName = ctx.from.last_name || null;
+
+      // Проверяем, существует ли пользователь
+      let telegramUser = await prisma.telegramUser.findFirst({
+        where: {
+          botId,
+          telegramUserId: BigInt(userId),
+        },
+      });
+
+      let isNewUser = false;
+      if (!telegramUser) {
+        // Создаем нового пользователя
+        isNewUser = true;
+        telegramUser = await prisma.telegramUser.create({
+          data: {
+            botId,
+            telegramUserId: BigInt(userId),
+            username,
+            firstName,
+            lastName,
+            source: null,
+            status: 'active',
+            joinedAt: new Date(),
+            lastActivity: new Date(),
+          },
+        });
+      } else {
+        // Обновляем информацию
+        telegramUser = await prisma.telegramUser.update({
+          where: { id: telegramUser.id },
+          data: {
+            username,
+            firstName,
+            lastName,
+            lastActivity: new Date(),
+            ...(telegramUser.status === 'blocked' || telegramUser.status === 'left'
+              ? { status: 'active' }
+              : {}),
+          },
+        });
+      }
+
+      // Обрабатываем триггеры для нового пользователя
+      if (isNewUser) {
+        await processTriggerEvent(TriggerEvent.USER_REGISTERED, botId, userId, {});
+      }
+
+      // Всегда отправляем приветственное сообщение
+      let welcomeText = 'Добро пожаловать!';
+
+      const template = await prisma.messageTemplate.findFirst({
+        where: {
+          botId,
+          isActive: true,
+          name: {
+            contains: 'welcome',
+            mode: 'insensitive',
+          },
+        },
+      });
+
+      if (template) {
+        welcomeText = processTemplate(template.content, telegramUser, {});
+      } else if (botData.welcomeMessage) {
+        welcomeText = processTemplate(botData.welcomeMessage as string, telegramUser, {});
+      }
+
+      // Получаем список каналов
+      const channels = (botData.channels as Array<{ name: string; url: string }>) || [];
+      const channelLink = botData.channelLink as string | null;
+      if (channelLink && !channels.some((ch) => ch.url === channelLink)) {
+        channels.push({ name: 'Канал', url: channelLink });
+      }
+
+      // Логика отображения кнопок (такая же как в /start)
+      if (botData.requiredInteraction && channels.length > 0) {
+        const continueText = (botData.continueButtonText as string) || '✅ Продолжить';
+        const keyboard = new InlineKeyboard().text(continueText, 'continue');
+        await ctx.reply(welcomeText, { reply_markup: keyboard });
+      } else if (channels.length > 0) {
+        const keyboard = new InlineKeyboard();
+        for (const channel of channels) {
+          keyboard.url(`📢 ${channel.name}`, channel.url).row();
+        }
+        await ctx.reply(welcomeText, { reply_markup: keyboard });
+      } else {
+        await ctx.reply(welcomeText);
+      }
+    } catch (error) {
+      console.error(`Error in handle_message for bot ${botId}:`, error);
+    }
+  });
+
+  // Обработчик события блокировки/разблокировки бота пользователем
+  bot.on('my_chat_member', async (ctx: Context) => {
+    try {
+      const update = ctx.myChatMember;
+      if (!update) return;
+
+      const userId = update.from.id;
+      const oldStatus = update.old_chat_member.status;
+      const newStatus = update.new_chat_member.status;
+
+      console.log(
+        `Bot ${botId}: User ${userId} changed bot status from ${oldStatus} to ${newStatus}`
+      );
+
+      // Если пользователь заблокировал бота
+      if (newStatus === 'kicked' || newStatus === 'left') {
+        await prisma.telegramUser.updateMany({
+          where: {
+            botId,
+            telegramUserId: BigInt(userId),
+          },
+          data: {
+            status: 'blocked',
+            lastActivity: new Date(),
+          },
+        });
+        console.log(`User ${userId} blocked bot ${botId}, status updated to 'blocked'`);
+      }
+      // Если пользователь разблокировал бота
+      else if (newStatus === 'member' && (oldStatus === 'kicked' || oldStatus === 'left')) {
+        await prisma.telegramUser.updateMany({
+          where: {
+            botId,
+            telegramUserId: BigInt(userId),
+          },
+          data: {
+            status: 'active',
+            lastActivity: new Date(),
+          },
+        });
+        console.log(`User ${userId} unblocked bot ${botId}, status updated to 'active'`);
+      }
+    } catch (error) {
+      console.error(`Error in handle_my_chat_member for bot ${botId}:`, error);
+    }
+  });
+
+  // Обработчик события присоединения пользователя к каналу/группе
+  bot.on('chat_member', async (ctx: Context) => {
+    try {
+      const update = ctx.chatMember;
+      if (!update) return;
+
+      const botData = await prisma.bot.findUnique({
+        where: { id: botId },
+      });
+
+      if (!botData || !botData.isActive) {
+        return;
+      }
+
+      const chat = update.chat;
+      if (chat.type !== 'channel' && chat.type !== 'group' && chat.type !== 'supergroup') {
+        return;
+      }
+
+      const user = update.new_chat_member.user;
+      if (!user) return;
+
+      const userId = user.id;
+      const oldStatus = update.old_chat_member.status;
+      const newStatus = update.new_chat_member.status;
+
+      // Проверяем, что это присоединение (JOIN)
+      const isJoin = oldStatus === 'left' && newStatus === 'member';
+
+      // Проверяем, что канал принадлежит этому боту
+      const channels = (botData.channels as Array<{ name: string; url: string }>) || [];
+      const channelLink = botData.channelLink as string | null;
+      if (channelLink && !channels.some((ch) => ch.url === channelLink)) {
+        channels.push({ name: 'Канал', url: channelLink });
+      }
+
+      const channelUsername = chat.username;
+      const channelId = chat.id.toString();
+
+      // Проверяем, что это один из каналов бота
+      let isBotChannel = false;
+      for (const channel of channels) {
+        const channelUrl = channel.url.toLowerCase();
+        if (channelUsername) {
+          const variants = [
+            `@${channelUsername}`,
+            `https://t.me/${channelUsername}`,
+            `http://t.me/${channelUsername}`,
+            `t.me/${channelUsername}`,
+            channelUsername,
+          ];
+          if (variants.some((v) => channelUrl.includes(v.toLowerCase()))) {
+            isBotChannel = true;
+            break;
+          }
+        }
+        if (channelUrl.includes(channelId) || channelUrl.includes(`-${channelId}`)) {
+          isBotChannel = true;
+          break;
+        }
+      }
+
+      if (!isBotChannel) {
+        return;
+      }
+
+      // Получаем или создаем пользователя
+      let telegramUser = await prisma.telegramUser.findFirst({
+        where: {
+          botId,
+          telegramUserId: BigInt(userId),
+        },
+      });
+
+      if (!telegramUser) {
+        telegramUser = await prisma.telegramUser.create({
+          data: {
+            botId,
+            telegramUserId: BigInt(userId),
+            username: user.username || null,
+            firstName: user.first_name || null,
+            lastName: user.last_name || null,
+            source: null,
+            status: 'active',
+            joinedAt: new Date(),
+            lastActivity: new Date(),
+          },
+        });
+      } else {
+        telegramUser = await prisma.telegramUser.update({
+          where: { id: telegramUser.id },
+          data: {
+            username: user.username || null,
+            firstName: user.first_name || null,
+            lastName: user.last_name || null,
+            lastActivity: new Date(),
+            ...(telegramUser.status === 'blocked' ? { status: 'active' } : {}),
+          },
+        });
+      }
+
+      // Обрабатываем триггер присоединения к каналу
+      if (isJoin) {
+        await processTriggerEvent(TriggerEvent.USER_JOINED_CHANNEL, botId, userId, {
+          channel_id: channelId,
+          channel_username: channelUsername || null,
+          channel_title: chat.title || null,
+        });
+      } else if (oldStatus === 'member' && newStatus === 'left') {
+        // Обрабатываем триггер отписки от канала
+        await processTriggerEvent(TriggerEvent.USER_LEFT_CHANNEL, botId, userId, {
+          channel_id: channelId,
+          channel_username: channelUsername || null,
+          channel_title: chat.title || null,
+        });
+      }
+    } catch (error) {
+      console.error(`Error in handle_chat_member for bot ${botId}:`, error);
+    }
+  });
+}

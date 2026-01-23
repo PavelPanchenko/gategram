@@ -1,14 +1,4 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-env/
-venv/
-ENV/
-.venv
-*.egg-info/
+# Tooling
 dist/
 build/
 
@@ -47,7 +37,4 @@ Thumbs.db
 # Media files
 media/
 
-# Celery
-backend/celerybeat-schedule
-backend/celerybeat-schedule.db
-backend/celerybeat.pid
+## Legacy - removed

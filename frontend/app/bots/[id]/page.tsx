@@ -10,6 +10,12 @@ import { useBot, useUpdateBot } from '@/app/hooks/useBots'
 import { useChannelInfo } from '@/app/hooks/useChannelInfo'
 import { useTemplates } from '@/app/hooks/useTemplates'
 import { useBotUsers } from '@/app/hooks/useUsers'
+import {
+  useReferralLinks,
+  useCreateReferralLink,
+  useDeleteReferralLink,
+  type ReferralLink,
+} from '@/app/hooks/useReferralLinks'
 import { Settings, FileText, Tag, Zap, X, CheckCircle, Users, Link2, Copy, Plus } from 'lucide-react'
 import { showToast } from '@/app/utils/toast'
 
@@ -92,6 +98,12 @@ export default function EditBotPage() {
   const { data: templates } = useTemplates(botId)
   const { data: users } = useBotUsers(botId)
   const updateBot = useUpdateBot()
+  const { data: referralLinks = [], isLoading: loadingLinks } = useReferralLinks(botId)
+  const createReferralLink = useCreateReferralLink()
+  const deleteReferralLink = useDeleteReferralLink()
+  
+  // Хуки должны быть объявлены до всех условных возвратов
+  const [newSource, setNewSource] = useState('')
   
   // Проверяем, есть ли активный шаблон с "welcome" в названии
   const welcomeTemplate = templates?.find(
@@ -177,9 +189,6 @@ export default function EditBotPage() {
     )
   }
 
-  const [referralLinks, setReferralLinks] = useState<Array<{ source: string; link: string }>>([])
-  const [newSource, setNewSource] = useState('')
-
   const generateReferralLink = () => {
     if (!newSource.trim()) {
       showToast.error('Введите название источника')
@@ -191,16 +200,26 @@ export default function EditBotPage() {
       return
     }
 
-    const botUsername = bot?.username
-    if (!botUsername) {
+    if (!bot?.username) {
       showToast.error('У бота нет username')
       return
     }
 
-    const link = `https://t.me/${botUsername}?start=${encodeURIComponent(newSource.trim())}`
-    setReferralLinks([...referralLinks, { source: newSource.trim(), link }])
-    setNewSource('')
-    showToast.success('Ссылка создана')
+    createReferralLink.mutate(
+      {
+        botId,
+        data: { source: newSource.trim() },
+      },
+      {
+        onSuccess: () => {
+          setNewSource('')
+          showToast.success('Ссылка создана')
+        },
+        onError: (error: any) => {
+          showToast.error(error?.response?.data?.detail || 'Ошибка при создании ссылки')
+        },
+      }
+    )
   }
 
   const copyToClipboard = (text: string) => {
@@ -208,8 +227,18 @@ export default function EditBotPage() {
     showToast.success('Ссылка скопирована')
   }
 
-  const removeReferralLink = (source: string) => {
-    setReferralLinks(referralLinks.filter(link => link.source !== source))
+  const removeReferralLink = (linkId: number) => {
+    deleteReferralLink.mutate(
+      { botId, linkId },
+      {
+        onSuccess: () => {
+          showToast.success('Ссылка удалена')
+        },
+        onError: (error: any) => {
+          showToast.error(error?.response?.data?.detail || 'Ошибка при удалении ссылки')
+        },
+      }
+    )
   }
 
   // Вычисляем статистику по источникам
@@ -274,39 +303,47 @@ export default function EditBotPage() {
             />
             <button
               onClick={generateReferralLink}
-              className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2"
+              disabled={createReferralLink.isPending || !bot?.username}
+              className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Plus size={18} />
-              Создать ссылку
+              {createReferralLink.isPending ? 'Создание...' : 'Создать ссылку'}
             </button>
           </div>
 
           {/* Список созданных ссылок */}
-          {referralLinks.length > 0 && (
+          {loadingLinks ? (
+            <div className="text-center py-8 text-gray-500">Загрузка ссылок...</div>
+          ) : referralLinks.length > 0 ? (
             <div className="space-y-3">
               {referralLinks.map((item) => (
                 <div
-                  key={item.source}
+                  key={item.id}
                   className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg border border-gray-200"
                 >
                   <div className="flex-1">
                     <div className="text-sm font-medium text-gray-700 mb-1">
                       Источник: <span className="text-indigo-600">{item.source}</span>
                     </div>
-                    <div className="text-sm text-gray-600 font-mono break-all">
-                      {item.link}
-                    </div>
+                    {item.link && (
+                      <div className="text-sm text-gray-600 font-mono break-all">
+                        {item.link}
+                      </div>
+                    )}
                   </div>
+                  {item.link && (
+                    <button
+                      onClick={() => copyToClipboard(item.link!)}
+                      className="px-3 py-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors flex items-center gap-1"
+                      title="Скопировать ссылку"
+                    >
+                      <Copy size={18} />
+                    </button>
+                  )}
                   <button
-                    onClick={() => copyToClipboard(item.link)}
-                    className="px-3 py-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors flex items-center gap-1"
-                    title="Скопировать ссылку"
-                  >
-                    <Copy size={18} />
-                  </button>
-                  <button
-                    onClick={() => removeReferralLink(item.source)}
-                    className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    onClick={() => removeReferralLink(item.id)}
+                    disabled={deleteReferralLink.isPending}
+                    className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
                     title="Удалить"
                   >
                     <X size={18} />
@@ -314,9 +351,7 @@ export default function EditBotPage() {
                 </div>
               ))}
             </div>
-          )}
-
-          {referralLinks.length === 0 && (
+          ) : (
             <div className="text-center py-8 text-gray-500">
               <Link2 size={48} className="mx-auto mb-2 opacity-50" />
               <p>Нет созданных ссылок</p>
