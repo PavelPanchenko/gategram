@@ -118,7 +118,7 @@ model Broadcast {
   templateId   Int?      @map("template_id")
   mediaType    String?   @map("media_type") @db.VarChar
   mediaUrl     String?   @map("media_url") @db.VarChar
-  mediaFiles   Json?
+  mediaFiles   Json?     @map("media_files")
   status       String    @default("pending") @db.VarChar
   scheduledAt  DateTime? @map("scheduled_at") @db.Timestamptz(6)
   startedAt    DateTime? @map("started_at") @db.Timestamptz(6)
