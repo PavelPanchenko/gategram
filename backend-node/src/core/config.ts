@@ -116,6 +116,32 @@ function normalizeDatabaseUrl(url: string): string {
   }
 }
 
+function applyDatabaseUrlHostOverride(normalizedUrl: string): string {
+  const host = process.env.DATABASE_URL_HOST;
+  const port = process.env.DATABASE_URL_PORT;
+  if (!host && !port) return normalizedUrl;
+
+  try {
+    const u = new URL(normalizedUrl);
+    if (host) u.hostname = host;
+    if (port) u.port = port;
+    return u.toString();
+  } catch {
+    // Если URL все еще не парсится, оставляем как есть — валидация ниже покажет ошибку
+    return normalizedUrl;
+  }
+}
+
+// Нормализуем и (опционально) переопределяем host/port для Docker
+const databaseUrl = applyDatabaseUrlHostOverride(
+  normalizeDatabaseUrl(process.env.DATABASE_URL || '')
+);
+
+// Если host/port переопределены (Docker), синхронизируем env, чтобы Prisma не взял "сырой" URL
+if (process.env.DATABASE_URL_HOST || process.env.DATABASE_URL_PORT) {
+  process.env.DATABASE_URL = databaseUrl;
+}
+
 export const config = {
   // App
   appName: process.env.APP_NAME || 'GateGram',
@@ -124,7 +150,7 @@ export const config = {
   debug: process.env.DEBUG === 'true',
 
   // Database - нормализуем URL
-  databaseUrl: normalizeDatabaseUrl(process.env.DATABASE_URL || ''),
+  databaseUrl,
   
   // Redis
   redisUrl: process.env.REDIS_URL || '',

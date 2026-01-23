@@ -6,7 +6,11 @@ import { config } from './config';
 let databaseUrl: string;
 if (process.env.TEST_DATABASE_URL && (process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID)) {
   databaseUrl = process.env.TEST_DATABASE_URL;
-} else if (process.env.DATABASE_URL && process.env.DATABASE_URL !== config.databaseUrl) {
+} else if (
+  process.env.DATABASE_URL &&
+  process.env.DATABASE_URL !== config.databaseUrl &&
+  !(process.env.DATABASE_URL_HOST || process.env.DATABASE_URL_PORT)
+) {
   // Если DATABASE_URL уже установлен (например, в setup.ts), используем его
   databaseUrl = process.env.DATABASE_URL;
 } else {

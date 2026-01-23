@@ -44,6 +44,9 @@ services:
       - NODE_ENV=production
       # В контейнере имя хоста Redis = "redis"
       - REDIS_URL=redis://redis:6379/0
+      # В контейнере имя хоста Postgres = "postgres" (вместо localhost из .env)
+      - DATABASE_URL_HOST=postgres
+      - DATABASE_URL_PORT=5432
     volumes:
       - backend_media:/app/media
     ports:

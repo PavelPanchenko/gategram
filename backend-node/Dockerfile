@@ -2,6 +2,9 @@ FROM node:20-alpine
 
 WORKDIR /app
 
+# Prisma (Alpine) needs OpenSSL runtime libs
+RUN apk add --no-cache openssl libc6-compat
+
 # Копируем файлы зависимостей
 COPY package.json package-lock.json* ./
 COPY prisma ./prisma/
