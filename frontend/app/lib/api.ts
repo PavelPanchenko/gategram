@@ -1,6 +1,18 @@
-// Используем переменную окружения везде (клиент и сервер)
-// NEXT_PUBLIC_* переменные доступны и на клиенте, и на сервере в Next.js
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api'
+// Используем переменную окружения везде (клиент и сервер).
+// NEXT_PUBLIC_* переменные доступны и на клиенте, и на сервере в Next.js.
+//
+// Важно:
+// - В браузере "localhost" означает устройство пользователя, а не сервер.
+// - Поэтому если NEXT_PUBLIC_API_URL не задан (или пустой), автоматически собираем URL по текущему hostname.
+const envApiUrl = process.env.NEXT_PUBLIC_API_URL?.trim()
+const apiPort = (process.env.NEXT_PUBLIC_API_PORT || '8001').trim()
+
+const API_URL =
+  envApiUrl && envApiUrl.length > 0
+    ? envApiUrl
+    : typeof window !== 'undefined'
+      ? `${window.location.protocol}//${window.location.hostname}:${apiPort}/api`
+      : `http://localhost:${apiPort}/api`
 
 // API URL конфигурация
 // В случае проблем с подключением проверьте NEXT_PUBLIC_API_URL в frontend/.env.local
