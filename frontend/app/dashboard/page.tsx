@@ -181,7 +181,7 @@ export default function DashboardPage() {
                       padding: '8px 12px'
                     }}
                     labelStyle={{ color: 'white', fontWeight: 'bold' }}
-                    formatter={(value: number) => [`${value} пользователей`, '']}
+                    formatter={((value: number | string | undefined) => [`${value ?? 0} пользователей`, '']) as any}
                   />
                   <Bar 
                     dataKey="count" 

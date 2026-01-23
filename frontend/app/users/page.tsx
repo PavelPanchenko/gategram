@@ -6,7 +6,7 @@ import DashboardLayout from '@/app/components/DashboardLayout'
 import { api, TelegramUser } from '@/app/lib/api'
 import { showToast, confirmAction } from '@/app/utils/toast'
 import Link from 'next/link'
-import { MessageCircle, Lock, Unlock, Loader2, X, Image, Video, Music, File, Users, Bot as BotIcon, Tag } from 'lucide-react'
+import { MessageCircle, Lock, Unlock, Loader2, X, Image as ImageIcon, Video, Music, File, Users, Bot as BotIcon, Tag } from 'lucide-react'
 import { useBots } from '@/app/hooks/useBots'
 import { useTags } from '@/app/hooks/useTags'
 import { useAssignTagsToUser } from '@/app/hooks/useTags'
@@ -203,7 +203,7 @@ function UserActions({
               />
               {mediaFile && (
                 <div className="mt-2 flex items-center gap-2 p-2 bg-gray-50 rounded-md">
-                  {mediaFile.type.startsWith('image/') && <Image size={16} className="text-gray-500" />}
+                  {mediaFile.type.startsWith('image/') && <ImageIcon size={16} className="text-gray-500" />}
                   {mediaFile.type.startsWith('video/') && <Video size={16} className="text-gray-500" />}
                   {mediaFile.type.startsWith('audio/') && <Music size={16} className="text-gray-500" />}
                   {!mediaFile.type.startsWith('image/') && !mediaFile.type.startsWith('video/') && !mediaFile.type.startsWith('audio/') && <File size={16} className="text-gray-500" />}
@@ -350,6 +350,7 @@ export default function UsersPage() {
 
   // Инициализация bot_id из query параметров
   useEffect(() => {
+    if (selectedBotId) return
     if (typeof window !== 'undefined') {
       const searchParams = new URLSearchParams(window.location.search)
       if (searchParams.has('bot_id')) {
@@ -359,7 +360,7 @@ export default function UsersPage() {
         }
       }
     }
-  }, [])
+  }, [selectedBotId])
 
   const getStatusBadge = (status: string) => {
     const colors: Record<string, string> = {

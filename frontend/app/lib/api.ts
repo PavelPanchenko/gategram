@@ -196,6 +196,9 @@ export interface Trigger {
   name: string
   event_type: string
   conditions: Record<string, any>
+  // Новый формат: массив действий
+  actions?: Array<{ type: string; data?: Record<string, any> }>
+  // Старый формат (для совместимости)
   action_type: string
   action_data: Record<string, any>
   is_active: boolean

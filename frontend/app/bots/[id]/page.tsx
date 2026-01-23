@@ -269,7 +269,7 @@ export default function EditBotPage() {
             <h2 className="text-2xl font-bold text-gray-900">Реферальные ссылки</h2>
           </div>
           <p className="text-gray-600 mb-4">
-            Создавайте уникальные ссылки для отслеживания источников трафика. Параметр будет сохранен в поле "source" пользователя.
+            Создавайте уникальные ссылки для отслеживания источников трафика. Параметр будет сохранен в поле «source» пользователя.
           </p>
 
           {/* Базовая ссылка на бота */}
@@ -419,7 +419,7 @@ export default function EditBotPage() {
                     className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-full hover:bg-blue-200 transition-colors flex items-center gap-1"
                   >
                     <FileText size={14} />
-                    <span>Используется шаблон "{welcomeTemplate.name}"</span>
+                    <span>Используется шаблон «{welcomeTemplate.name}»</span>
                   </Link>
                 )}
               </div>
@@ -440,7 +440,7 @@ export default function EditBotPage() {
                     <strong>Активен шаблон приветствия</strong>
                   </p>
                   <p className="text-xs text-blue-700 mb-2">
-                    Бот использует шаблон "<strong>{welcomeTemplate.name}</strong>" вместо этого поля. 
+                    Бот использует шаблон «<strong>{welcomeTemplate.name}</strong>» вместо этого поля. 
                     Чтобы использовать это поле, деактивируйте или удалите шаблон на странице{' '}
                     <Link href="/templates" className="underline font-semibold">
                       Шаблоны
@@ -470,7 +470,7 @@ export default function EditBotPage() {
               </div>
               {fields.length === 0 ? (
                 <div className="text-sm text-gray-500 mb-2">
-                  Нет каналов. Нажмите "Добавить канал" чтобы добавить.
+                  Нет каналов. Нажмите «Добавить канал», чтобы добавить.
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -509,7 +509,7 @@ export default function EditBotPage() {
               <>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Текст кнопки "Продолжить"
+                    Текст кнопки «Продолжить»
                   </label>
                   <input
                     type="text"

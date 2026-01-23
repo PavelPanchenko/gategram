@@ -19,7 +19,7 @@ const triggerSchema = z.object({
   name: z.string().min(1, 'Название обязательно'),
   event_type: z.string().min(1, 'Тип события обязателен'),
   action_type: z.string().optional(), // Теперь необязательно, используется для обратной совместимости
-  is_active: z.boolean().default(true),
+  is_active: z.boolean(),
   bot_id: z.string().optional(),
   conditions: z.record(z.string(), z.unknown()).optional(),
   action_data: z.record(z.string(), z.unknown()).optional(),
@@ -85,7 +85,7 @@ export default function TriggersPage() {
 
   const onSubmit = async (data: TriggerFormData) => {
     // Используем выбранный в фильтре бот, если он есть, иначе из формы
-    const botId = selectedBotId || parseInt(data.bot_id)
+    const botId = selectedBotId || parseInt(data.bot_id || '')
     if (!botId) {
       showToast.error('Выберите бота')
       return

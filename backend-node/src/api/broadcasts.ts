@@ -4,6 +4,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
+import { Prisma } from '@prisma/client';
 import { authenticateToken } from '../middleware/auth';
 import prisma from '../core/database';
 import { filterUsersForBroadcast, BroadcastFilters } from '../utils/broadcastFilters';
@@ -481,7 +482,7 @@ router.post('/:broadcastId/cancel', authenticateToken, async (req: Request, res:
         status: 'cancelled',
         mediaUrl: null,
         mediaType: null,
-        mediaFiles: null,
+        mediaFiles: Prisma.DbNull,
       },
     });
 
@@ -526,7 +527,7 @@ router.delete('/:broadcastId', authenticateToken, async (req: Request, res: Resp
     
     // Способ 1: через заголовок (ПРИОРИТЕТНЫЙ - наиболее надежный для DELETE)
     const headerValue = req.headers['x-delete-messages'] || req.headers['X-Delete-Messages'];
-    if (headerValue === 'true' || headerValue === '1' || headerValue === true) {
+    if (headerValue === 'true' || headerValue === '1') {
       deleteMessages = true;
       if (debug) console.log(`[Delete Broadcast] Found delete_messages in header:`, headerValue);
     }
@@ -534,7 +535,7 @@ router.delete('/:broadcastId', authenticateToken, async (req: Request, res: Resp
     // Способ 2: через req.body
     if (!deleteMessages && req.body && typeof req.body === 'object') {
       const bodyValue = req.body.delete_messages || req.body.deleteMessages;
-      if (bodyValue === true || bodyValue === 'true' || bodyValue === '1') {
+      if (bodyValue === 'true' || bodyValue === '1') {
         deleteMessages = true;
         if (debug) console.log(`[Delete Broadcast] Found delete_messages in req.body:`, bodyValue);
       }
@@ -543,7 +544,7 @@ router.delete('/:broadcastId', authenticateToken, async (req: Request, res: Resp
     // Способ 3: через req.query (стандартный)
     if (!deleteMessages) {
       const queryParam = req.query.delete_messages || req.query['delete_messages'];
-      if (queryParam === 'true' || queryParam === '1' || queryParam === true) {
+      if (queryParam === 'true' || queryParam === '1') {
         deleteMessages = true;
         if (debug) console.log(`[Delete Broadcast] Found delete_messages in req.query:`, queryParam);
       }

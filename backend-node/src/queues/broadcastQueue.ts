@@ -4,9 +4,9 @@
 
 import { Queue, QueueEvents } from 'bullmq';
 import { config } from '../core/config';
-import { ConnectionOptions } from 'ioredis';
+import type { RedisOptions } from 'ioredis';
 
-function buildRedisConnection(): ConnectionOptions {
+function buildRedisConnection(): RedisOptions {
   // Приоритет: REDIS_URL из config
   if (config.redisUrl) {
     try {
@@ -33,7 +33,7 @@ function buildRedisConnection(): ConnectionOptions {
 }
 
 // Настройка подключения к Redis
-const connection: ConnectionOptions = buildRedisConnection();
+const connection: RedisOptions = buildRedisConnection();
 
 // Создаем очередь для рассылок
 export const broadcastQueue = new Queue('broadcasts', {

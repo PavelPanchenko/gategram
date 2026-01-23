@@ -145,7 +145,7 @@ export default function NewBotPage() {
             </div>
             {fields.length === 0 ? (
               <div className="text-sm text-gray-500 mb-2">
-                Нет каналов. Нажмите "Добавить канал" чтобы добавить.
+                Нет каналов. Нажмите «Добавить канал», чтобы добавить.
               </div>
             ) : (
               <div className="space-y-3">
@@ -184,7 +184,7 @@ export default function NewBotPage() {
             <>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Текст кнопки "Продолжить"
+                  Текст кнопки «Продолжить»
                 </label>
                 <input
                   type="text"

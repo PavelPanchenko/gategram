@@ -15,7 +15,7 @@ import Link from 'next/link'
 
 const tagSchema = z.object({
   name: z.string().min(1, 'Название обязательно'),
-  color: z.string().default('#3B82F6'),
+  color: z.string().min(1, 'Цвет обязателен'),
   description: z.string().optional(),
   bot_id: z.string().optional(),
 })
@@ -50,7 +50,7 @@ export default function TagsPage() {
 
   const onSubmit = async (data: TagFormData) => {
     // Используем выбранный в фильтре бот, если он есть, иначе из формы
-    const botId = selectedBotId || parseInt(data.bot_id)
+    const botId = selectedBotId || parseInt(data.bot_id || '')
     if (!botId) {
       showToast.error('Выберите бота')
       return
@@ -158,7 +158,7 @@ export default function TagsPage() {
               <h3 className="font-semibold text-blue-900 mb-2">Как использовать теги</h3>
               <ul className="text-sm text-blue-800 space-y-1">
                 <li>• Создавайте теги для сегментации пользователей (например: VIP, Новички, Активные)</li>
-                <li>• Назначайте теги пользователям на странице "Пользователи" конкретного бота</li>
+                <li>• Назначайте теги пользователям на странице «Пользователи» конкретного бота</li>
                 <li>• Используйте теги в триггерах для автоматических действий с определенными группами</li>
                 <li>• Фильтруйте пользователей по тегам для таргетированных рассылок</li>
               </ul>

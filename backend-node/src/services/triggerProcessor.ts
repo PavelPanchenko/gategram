@@ -153,7 +153,11 @@ async function checkConditions(
     }
 
     const userTagNames = new Set(user.tags.map((tag) => tag.name));
-    const requiredTags = new Set(conditions.tags);
+    const requiredTags = new Set(
+      (Array.isArray(conditions.tags) ? conditions.tags : []).filter(
+        (t: unknown): t is string => typeof t === 'string'
+      )
+    );
 
     // Проверяем, что все требуемые теги есть у пользователя
     for (const tag of requiredTags) {

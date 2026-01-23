@@ -1,11 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api, UserTag } from '@/app/lib/api'
 
-export function useTags(botId: number) {
+export function useTags(botId?: number) {
   return useQuery<UserTag[]>({
     queryKey: ['tags', botId],
-    queryFn: () => api.getTags(botId),
-    enabled: !!botId,
+    queryFn: () => api.getTags(botId as number),
+    enabled: typeof botId === 'number' && !Number.isNaN(botId),
   })
 }
 

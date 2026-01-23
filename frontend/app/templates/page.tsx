@@ -49,7 +49,7 @@ export default function TemplatesPage() {
 
   const onSubmit = async (data: TemplateFormData) => {
     // Используем выбранный в фильтре бот, если он есть, иначе из формы
-    const botId = selectedBotId || parseInt(data.bot_id)
+    const botId = selectedBotId || parseInt(data.bot_id || '')
     if (!botId) {
       showToast.error('Выберите бота')
       return
@@ -79,7 +79,6 @@ export default function TemplatesPage() {
 
   const handleEdit = (template: any) => {
     setEditingId(template.id)
-    setEditingBotId(template.bot_id)
     reset({
       name: template.name,
       content: template.content,
@@ -155,9 +154,9 @@ export default function TemplatesPage() {
             <div>
               <h3 className="font-semibold text-blue-900 mb-2">Как использовать шаблоны</h3>
               <ul className="text-sm text-blue-800 space-y-1">
-                <li>• Создайте шаблон с названием, содержащим слово "welcome" - он будет использоваться как приветственное сообщение</li>
+                <li>• Создайте шаблон с названием, содержащим слово «welcome» — он будет использоваться как приветственное сообщение</li>
                 <li>• Используйте переменные: <code className="bg-blue-100 px-1 rounded">{'{{user_name}}'}</code>, <code className="bg-blue-100 px-1 rounded">{'{{source}}'}</code>, <code className="bg-blue-100 px-1 rounded">{'{{user_id}}'}</code></li>
-                <li>• Активный шаблон "welcome" заменит стандартное приветственное сообщение бота</li>
+                <li>• Активный шаблон «welcome» заменит стандартное приветственное сообщение бота</li>
                 <li>• Шаблоны можно использовать в триггерах для автоматических сообщений</li>
               </ul>
             </div>
@@ -170,7 +169,6 @@ export default function TemplatesPage() {
           onClose={() => {
             setShowForm(false)
             setEditingId(null)
-            setEditingBotId(null)
             reset()
           }}
           title={editingId ? 'Редактировать шаблон' : 'Создать шаблон'}
@@ -233,7 +231,6 @@ export default function TemplatesPage() {
                 onClick={() => {
                   setShowForm(false)
                   setEditingId(null)
-                  setEditingBotId(null)
                   reset()
                 }}
                 className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"

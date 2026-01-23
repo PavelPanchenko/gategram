@@ -9,7 +9,7 @@ import Link from 'next/link'
 import { Edit2, Users, Play, Pause, Trash2, Plus } from 'lucide-react'
 
 export default function BotsPage() {
-  const { data: bots, isLoading: loading } = useBots()
+  const { data: bots = [], isLoading: loading } = useBots()
   const [showCreateForm, setShowCreateForm] = useState(false)
   const startBot = useStartBot()
   const stopBot = useStopBot()
