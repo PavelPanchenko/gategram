@@ -4,10 +4,21 @@
 
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import prisma from '../core/database';
 import { authenticateToken } from '../middleware/auth';
 
 const router = Router();
+
+let warnedMissingReferralLinksTable = false;
+function isMissingReferralLinksTableError(error: unknown): boolean {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === 'P2021' &&
+    typeof (error as any).meta?.table === 'string' &&
+    String((error as any).meta.table).includes('referral_links')
+  );
+}
 
 // Схемы валидации
 const ReferralLinkCreateSchema = z.object({
@@ -41,10 +52,24 @@ router.get('/:botId/referral-links', authenticateToken, async (req: Request, res
     }
 
     // Получаем реферальные ссылки
-    const referralLinks = await prisma.referralLink.findMany({
-      where: { botId },
-      orderBy: { createdAt: 'desc' },
-    });
+    let referralLinks: Array<{ id: number; source: string; createdAt: Date; updatedAt: Date | null }> = [];
+    try {
+      referralLinks = await prisma.referralLink.findMany({
+        where: { botId },
+        orderBy: { createdAt: 'desc' },
+      });
+    } catch (error) {
+      if (isMissingReferralLinksTableError(error)) {
+        if (!warnedMissingReferralLinksTable) {
+          warnedMissingReferralLinksTable = true;
+          console.warn(
+            '⚠️  referral_links table is missing. Referral links feature is disabled until DB is initialized (INIT_DB=1).'
+          );
+        }
+        return res.json([]);
+      }
+      throw error;
+    }
 
     // Генерируем полные ссылки
     const linksWithUrls = referralLinks.map((link) => {
@@ -96,26 +121,48 @@ router.post('/:botId/referral-links', authenticateToken, async (req: Request, re
     }
 
     // Проверяем, что ссылка с таким source еще не существует
-    const existing = await prisma.referralLink.findUnique({
-      where: {
-        botId_source: {
-          botId,
-          source: body.source.trim(),
+    let existing: any = null;
+    try {
+      existing = await prisma.referralLink.findUnique({
+        where: {
+          botId_source: {
+            botId,
+            source: body.source.trim(),
+          },
         },
-      },
-    });
+      });
+    } catch (error) {
+      if (isMissingReferralLinksTableError(error)) {
+        return res.status(503).json({
+          detail:
+            'Referral links table is missing. Initialize database schema (run backend-node once with INIT_DB=1).',
+        });
+      }
+      throw error;
+    }
 
     if (existing) {
       return res.status(409).json({ detail: 'Referral link with this source already exists' });
     }
 
     // Создаем реферальную ссылку
-    const referralLink = await prisma.referralLink.create({
-      data: {
-        botId,
-        source: body.source.trim(),
-      },
-    });
+    let referralLink: any;
+    try {
+      referralLink = await prisma.referralLink.create({
+        data: {
+          botId,
+          source: body.source.trim(),
+        },
+      });
+    } catch (error) {
+      if (isMissingReferralLinksTableError(error)) {
+        return res.status(503).json({
+          detail:
+            'Referral links table is missing. Initialize database schema (run backend-node once with INIT_DB=1).',
+        });
+      }
+      throw error;
+    }
 
     const url = `https://t.me/${bot.username}?start=${encodeURIComponent(referralLink.source)}`;
 
@@ -168,12 +215,23 @@ router.put('/:botId/referral-links/:linkId', authenticateToken, async (req: Requ
     }
 
     // Проверяем, что ссылка существует и принадлежит боту
-    const existingLink = await prisma.referralLink.findFirst({
-      where: {
-        id: linkId,
-        botId,
-      },
-    });
+    let existingLink: any;
+    try {
+      existingLink = await prisma.referralLink.findFirst({
+        where: {
+          id: linkId,
+          botId,
+        },
+      });
+    } catch (error) {
+      if (isMissingReferralLinksTableError(error)) {
+        return res.status(503).json({
+          detail:
+            'Referral links table is missing. Initialize database schema (run backend-node once with INIT_DB=1).',
+        });
+      }
+      throw error;
+    }
 
     if (!existingLink) {
       return res.status(404).json({ detail: 'Referral link not found' });
@@ -196,12 +254,23 @@ router.put('/:botId/referral-links/:linkId', authenticateToken, async (req: Requ
     }
 
     // Обновляем ссылку
-    const updatedLink = await prisma.referralLink.update({
-      where: { id: linkId },
-      data: {
-        source: body.source.trim(),
-      },
-    });
+    let updatedLink: any;
+    try {
+      updatedLink = await prisma.referralLink.update({
+        where: { id: linkId },
+        data: {
+          source: body.source.trim(),
+        },
+      });
+    } catch (error) {
+      if (isMissingReferralLinksTableError(error)) {
+        return res.status(503).json({
+          detail:
+            'Referral links table is missing. Initialize database schema (run backend-node once with INIT_DB=1).',
+        });
+      }
+      throw error;
+    }
 
     const url = bot.username
       ? `https://t.me/${bot.username}?start=${encodeURIComponent(updatedLink.source)}`
@@ -247,21 +316,42 @@ router.delete('/:botId/referral-links/:linkId', authenticateToken, async (req: R
     }
 
     // Проверяем, что ссылка существует и принадлежит боту
-    const existingLink = await prisma.referralLink.findFirst({
-      where: {
-        id: linkId,
-        botId,
-      },
-    });
+    let existingLink: any;
+    try {
+      existingLink = await prisma.referralLink.findFirst({
+        where: {
+          id: linkId,
+          botId,
+        },
+      });
+    } catch (error) {
+      if (isMissingReferralLinksTableError(error)) {
+        return res.status(503).json({
+          detail:
+            'Referral links table is missing. Initialize database schema (run backend-node once with INIT_DB=1).',
+        });
+      }
+      throw error;
+    }
 
     if (!existingLink) {
       return res.status(404).json({ detail: 'Referral link not found' });
     }
 
     // Удаляем ссылку
-    await prisma.referralLink.delete({
-      where: { id: linkId },
-    });
+    try {
+      await prisma.referralLink.delete({
+        where: { id: linkId },
+      });
+    } catch (error) {
+      if (isMissingReferralLinksTableError(error)) {
+        return res.status(503).json({
+          detail:
+            'Referral links table is missing. Initialize database schema (run backend-node once with INIT_DB=1).',
+        });
+      }
+      throw error;
+    }
 
     return res.status(204).send();
   } catch (error) {
