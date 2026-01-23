@@ -3,18 +3,26 @@
 //
 // Важно:
 // - В браузере "localhost" означает устройство пользователя, а не сервер.
-// - Поэтому если NEXT_PUBLIC_API_URL не задан (или пустой), автоматически собираем URL по текущему hostname.
-// - Для SSR (серверной рендеринга) используем NEXT_PUBLIC_API_HOST или fallback на localhost.
+// - Для SSR (серверной рендеринга) используем внутренний Docker хост (backend-node:8001) для скорости.
+// - На клиенте используем внешний IP или автоматически определяем по hostname.
 const envApiUrl = process.env.NEXT_PUBLIC_API_URL?.trim()
 const apiPort = (process.env.NEXT_PUBLIC_API_PORT || '8001').trim()
 const apiHost = process.env.NEXT_PUBLIC_API_HOST?.trim() || 'localhost'
+// Для SSR используем внутренний Docker хост (если доступен) или fallback
+const ssrApiHost = process.env.NEXT_PUBLIC_API_URL_SSR?.trim() || 'backend-node'
 
 const API_URL =
-  envApiUrl && envApiUrl.length > 0
-    ? envApiUrl
-    : typeof window !== 'undefined'
-      ? `${window.location.protocol}//${window.location.hostname}:${apiPort}/api`
-      : `http://${apiHost}:${apiPort}/api`
+  typeof window !== 'undefined'
+    ? // КЛИЕНТ (браузер): используем явный URL или собираем по hostname
+      (envApiUrl && envApiUrl.length > 0
+        ? envApiUrl
+        : `${window.location.protocol}//${window.location.hostname}:${apiPort}/api`)
+    : // SSR (сервер): используем внутренний Docker хост для скорости
+      (process.env.NEXT_PUBLIC_API_URL_SSR
+        ? `http://${ssrApiHost}:${apiPort}/api`
+        : envApiUrl && envApiUrl.length > 0
+          ? envApiUrl
+          : `http://${ssrApiHost}:${apiPort}/api`)
 
 // API URL конфигурация
 // В случае проблем с подключением проверьте NEXT_PUBLIC_API_URL в frontend/.env.local

@@ -81,11 +81,11 @@ services:
       - backend-node
     environment:
       - NODE_ENV=production
-      # API URL для продакшена (можно переопределить через .env.local или здесь)
-      - NEXT_PUBLIC_API_HOST=${NEXT_PUBLIC_API_HOST:-185.253.218.21}
+      # API URL для клиента (браузер) - внешний IP
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://185.253.218.21:8001/api}
+      # API URL для SSR (сервер) - внутренний Docker хост для скорости
+      - NEXT_PUBLIC_API_URL_SSR=${NEXT_PUBLIC_API_URL_SSR:-backend-node}
       - NEXT_PUBLIC_API_PORT=${NEXT_PUBLIC_API_PORT:-8001}
-      # Или явно задать полный URL (приоритет выше)
-      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-}
     command: sh -c "npm run build && npm start"
 
 volumes:
