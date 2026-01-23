@@ -18,6 +18,7 @@ import {
 } from '@/app/hooks/useReferralLinks'
 import { Settings, FileText, Tag, Zap, X, CheckCircle, Users, Link2, Copy, Plus } from 'lucide-react'
 import { showToast } from '@/app/utils/toast'
+import { copyToClipboardWithToast } from '@/app/utils/clipboard'
 
 type FormData = {
   name: string
@@ -223,8 +224,7 @@ export default function EditBotPage() {
   }
 
   const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text)
-    showToast.success('Ссылка скопирована')
+    copyToClipboardWithToast(text)
   }
 
   const removeReferralLink = (linkId: number) => {
