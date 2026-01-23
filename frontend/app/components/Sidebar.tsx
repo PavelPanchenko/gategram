@@ -3,18 +3,20 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { api } from '@/app/lib/api'
-import { useRouter } from 'next/navigation'
+import { useAuth } from '@/app/hooks/useAuth'
 import { LayoutDashboard, Bot, Send, LogOut, FileText, Tag, Zap, Users, Menu, X } from 'lucide-react'
 
 export default function Sidebar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const pathname = usePathname()
-  const router = useRouter()
+  const { logout } = useAuth()
 
-  const handleLogout = async () => {
-    await api.logout()
-    router.push('/login')
+  const handleLogout = () => {
+    logout()
+    // Гарантированный редирект через window.location (как в login)
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login'
+    }
   }
 
   const navItems = [
