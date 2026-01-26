@@ -13,6 +13,26 @@ import { botManager } from '../services/botManager';
 
 const router = express.Router();
 
+function formatBotResponse(bot: any) {
+  return {
+    id: bot.id,
+    owner_id: bot.ownerId,
+    token: bot.token,
+    username: bot.username,
+    name: bot.name,
+    is_active: bot.isActive,
+    welcome_message: bot.welcomeMessage,
+    required_interaction: bot.requiredInteraction,
+    interaction_delay_seconds: bot.interactionDelaySeconds,
+    continue_button_text: bot.continueButtonText,
+    channel_link: bot.channelLink,
+    channels: bot.channels,
+    settings: bot.settings || {},
+    created_at: bot.createdAt,
+    updated_at: bot.updatedAt,
+  };
+}
+
 // Multer (in-memory) for personal message media
 const personalMessageUpload = multer({
   storage: multer.memoryStorage(),
@@ -178,11 +198,7 @@ router.get('/:botId', authenticateToken, async (req: Request, res: Response) => 
       return res.status(404).json({ detail: 'Bot not found' });
     }
 
-    // Преобразуем isActive в is_active для совместимости с фронтендом
-    return res.json({
-      ...bot,
-      is_active: bot.isActive,
-    });
+    return res.json(formatBotResponse(bot));
   } catch (error) {
     console.error('Error getting bot:', error);
     return res.status(500).json({ detail: 'Internal server error' });
@@ -257,10 +273,7 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
     }
 
     // Преобразуем isActive в is_active для совместимости с фронтендом
-    return res.status(201).json({
-      ...newBot,
-      is_active: newBot.isActive,
-    });
+    return res.status(201).json(formatBotResponse(newBot));
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(422).json({ detail: error.errors });
@@ -373,10 +386,7 @@ router.put('/:botId', authenticateToken, async (req: Request, res: Response) => 
     }
 
     // Преобразуем isActive в is_active для совместимости с фронтендом
-    return res.json({
-      ...updatedBot,
-      is_active: updatedBot.isActive,
-    });
+    return res.json(formatBotResponse(updatedBot));
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(422).json({ detail: error.errors });
