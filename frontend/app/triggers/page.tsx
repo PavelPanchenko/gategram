@@ -80,7 +80,7 @@ export default function TriggersPage() {
   // Получаем теги и шаблоны для выбранного бота (используем selectedBotId или bot_id из формы)
   const formBotId = watch('bot_id')
   const tagsBotId = selectedBotId || (formBotId ? parseInt(formBotId) : undefined)
-  const { data: tags, isLoading: loadingTags } = useTags(tagsBotId || 0)
+  const { data: tags, isLoading: loadingTags } = useTags(tagsBotId)
   const { data: templates, isLoading: loadingTemplates } = useAllTemplates(tagsBotId)
 
   const onSubmit = async (data: TriggerFormData) => {

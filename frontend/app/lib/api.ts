@@ -320,38 +320,66 @@ class ApiClient {
       });
     }
 
-    const response = await fetch(url, {
-      ...options,
-      headers,
-      credentials: 'include',
-    })
+    // Таймаут для запросов (30 секунд по умолчанию, для /users - 60 секунд)
+    const timeoutMs = endpoint.includes('/users') ? 60000 : 30000
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+
+    let response: Response
+    try {
+      response = await fetch(url, {
+        ...options,
+        headers,
+        credentials: 'include',
+        signal: controller.signal,
+      })
+      clearTimeout(timeoutId)
+    } catch (error: any) {
+      clearTimeout(timeoutId)
+      if (error.name === 'AbortError') {
+        throw new Error(`Request timeout after ${timeoutMs / 1000} seconds`)
+      }
+      throw error
+    }
 
     if (!response.ok) {
       // Если 401, пытаемся обновить токен и повторить запрос
       if (response.status === 401) {
         const newToken = await refreshAccessToken()
         if (newToken && endpoint !== '/auth/refresh') {
-          // Повторяем запрос с новым токеном
+          // Повторяем запрос с новым токеном (с таймаутом)
           headers['Authorization'] = `Bearer ${newToken}`
-          const retryResponse = await fetch(`${this.baseUrl}${endpoint}`, {
-            ...options,
-            headers,
-            credentials: 'include',
-          })
-          
-          if (!retryResponse.ok) {
-            this.removeToken()
-            throw new Error('Unauthorized')
+          const retryController = new AbortController()
+          const retryTimeoutId = setTimeout(() => retryController.abort(), timeoutMs)
+          try {
+            const retryResponse = await fetch(`${this.baseUrl}${endpoint}`, {
+              ...options,
+              headers,
+              credentials: 'include',
+              signal: retryController.signal,
+            })
+            clearTimeout(retryTimeoutId)
+            
+            if (!retryResponse.ok) {
+              this.removeToken()
+              throw new Error('Unauthorized')
+            }
+            
+            // Проверяем, есть ли контент для парсинга
+            const contentType = retryResponse.headers.get('content-type')
+            if (retryResponse.status === 204 || !contentType?.includes('application/json')) {
+              return null as T
+            }
+            
+            const text = await retryResponse.text()
+            return text ? JSON.parse(text) : null as T
+          } catch (retryError: any) {
+            clearTimeout(retryTimeoutId)
+            if (retryError.name === 'AbortError') {
+              throw new Error(`Request timeout after ${timeoutMs / 1000} seconds`)
+            }
+            throw retryError
           }
-          
-          // Проверяем, есть ли контент для парсинга
-          const contentType = retryResponse.headers.get('content-type')
-          if (retryResponse.status === 204 || !contentType?.includes('application/json')) {
-            return null as T
-          }
-          
-          const text = await retryResponse.text()
-          return text ? JSON.parse(text) : null as T
         }
         this.removeToken()
       }

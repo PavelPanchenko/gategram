@@ -5,6 +5,14 @@ export function useAllUsers(botId?: number, status?: string, source?: string) {
   return useQuery({
     queryKey: ['users', 'all', botId, status, source],
     queryFn: () => api.getAllUsers(botId, status, source),
+    // Отключаем SSR для этого запроса - загружаем только на клиенте
+    // Это предотвращает блокировку рендеринга страницы
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
+    staleTime: 30 * 1000, // 30 секунд - данные считаются свежими
+    gcTime: 5 * 60 * 1000, // 5 минут в кеше
+    retry: 1, // Только 1 повторная попытка
+    retryDelay: 1000, // Задержка 1 секунда
   })
 }
 

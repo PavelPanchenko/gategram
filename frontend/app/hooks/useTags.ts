@@ -5,7 +5,7 @@ export function useTags(botId?: number) {
   return useQuery<UserTag[]>({
     queryKey: ['tags', botId],
     queryFn: () => api.getTags(botId as number),
-    enabled: typeof botId === 'number' && !Number.isNaN(botId),
+    enabled: typeof botId === 'number' && !Number.isNaN(botId) && botId > 0,
   })
 }
 

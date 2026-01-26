@@ -8,6 +8,55 @@ import { processTriggerEvent, TriggerEvent } from '../utils/triggerProcessor';
 import { processTemplate } from '../utils/templateProcessor';
 import { botManager } from './botManager';
 
+type UiLocale = 'ru' | 'en';
+function getUiLocale(ctx: Context): UiLocale {
+  const lang = (ctx.from?.language_code || '').toLowerCase();
+  // Telegram language_code usually like: 'ru', 'en', 'uk', 'en-US'
+  if (lang.startsWith('ru') || lang.startsWith('uk') || lang.startsWith('be')) return 'ru';
+  return 'en';
+}
+
+const UI_TEXT: Record<UiLocale, {
+  channelsIntro: string;
+  thanks: string;
+  channelsNotConfigured: string;
+  chooseChannel: string;
+}> = {
+  ru: {
+    channelsIntro: 'Отлично! Вот ссылки на наши каналы:',
+    thanks: 'Спасибо за взаимодействие!',
+    channelsNotConfigured: 'Каналы не настроены.',
+    chooseChannel: 'Выберите канал:',
+  },
+  en: {
+    channelsIntro: "Great! Here are links to our channels:",
+    thanks: 'Thanks for your interaction!',
+    channelsNotConfigured: 'No channels configured.',
+    chooseChannel: 'Choose a channel:',
+  },
+};
+
+function getBotUiText(settings: unknown, locale: UiLocale) {
+  const base = UI_TEXT[locale];
+  const s: any = settings && typeof settings === 'object' ? settings : {};
+  // поддерживаем несколько вариантов ключей, чтобы мигрировать без боли
+  const ui =
+    s.ui_texts?.[locale] ??
+    s.uiTexts?.[locale] ??
+    s.ui_text?.[locale] ??
+    s.uiText?.[locale] ??
+    {};
+
+  return {
+    channelsIntro: String(ui.channelsIntro ?? ui.channels_intro ?? base.channelsIntro),
+    thanks: String(ui.thanks ?? base.thanks),
+    channelsNotConfigured: String(
+      ui.channelsNotConfigured ?? ui.channels_not_configured ?? base.channelsNotConfigured
+    ),
+    chooseChannel: String(ui.chooseChannel ?? ui.choose_channel ?? base.chooseChannel),
+  };
+}
+
 // Глобальный словарь для отслеживания обрабатываемых команд /start
 // Ключ: `${botId}_${userId}`, Значение: timestamp последней обработки
 const processingStartCommands: Map<string, number> = new Map();
@@ -303,13 +352,15 @@ export function setupBotHandlers(bot: Bot, botId: number): void {
 
       // Отправляем НОВОЕ сообщение со ссылками на каналы
       if (channels.length > 0) {
+        const t = getBotUiText((botData as any).settings, getUiLocale(ctx));
         const keyboard = new InlineKeyboard();
         for (const channel of channels) {
           keyboard.url(`📢 ${channel.name}`, channel.url).row();
         }
-        await ctx.reply('Отлично! Вот ссылки на наши каналы:', { reply_markup: keyboard });
+        await ctx.reply(t.channelsIntro, { reply_markup: keyboard });
       } else {
-        await ctx.reply('Спасибо за взаимодействие!');
+        const t = getBotUiText((botData as any).settings, getUiLocale(ctx));
+        await ctx.reply(t.thanks);
       }
     } catch (error) {
       console.error(`Error in process_continue for bot ${botId}:`, error);
@@ -336,7 +387,8 @@ export function setupBotHandlers(bot: Bot, botId: number): void {
       }
 
       if (channels.length === 0) {
-        await ctx.reply('Каналы не настроены.');
+        const t = getBotUiText((botData as any).settings, getUiLocale(ctx));
+        await ctx.reply(t.channelsNotConfigured);
         return;
       }
 
@@ -346,7 +398,8 @@ export function setupBotHandlers(bot: Bot, botId: number): void {
         keyboard.url(`📢 ${channel.name}`, channel.url).row();
       }
 
-      await ctx.reply('Выберите канал:', { reply_markup: keyboard });
+      const t = getBotUiText((botData as any).settings, getUiLocale(ctx));
+      await ctx.reply(t.chooseChannel, { reply_markup: keyboard });
     } catch (error) {
       console.error(`Error in cmd_channels for bot ${botId}:`, error);
     }

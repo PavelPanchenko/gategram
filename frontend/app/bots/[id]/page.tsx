@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useForm, useFieldArray, useFormContext, FormProvider } from 'react-hook-form'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
@@ -28,7 +28,38 @@ type FormData = {
   continue_button_text: string
   channels: Channel[]
   is_active: boolean
+  settings: {
+    ui_texts: {
+      ru: {
+        channelsIntro: string
+        thanks: string
+        channelsNotConfigured: string
+        chooseChannel: string
+      }
+      en: {
+        channelsIntro: string
+        thanks: string
+        channelsNotConfigured: string
+        chooseChannel: string
+      }
+    }
+  }
 }
+
+const DEFAULT_UI_TEXTS = {
+  ru: {
+    channelsIntro: 'Отлично! Вот ссылки на наши каналы:',
+    thanks: 'Спасибо за взаимодействие!',
+    channelsNotConfigured: 'Каналы не настроены.',
+    chooseChannel: 'Выберите канал:',
+  },
+  en: {
+    channelsIntro: 'Great! Here are links to our channels:',
+    thanks: 'Thanks for your interaction!',
+    channelsNotConfigured: 'No channels configured.',
+    chooseChannel: 'Choose a channel:',
+  },
+} as const
 
 function ChannelInput({ 
   index, 
@@ -41,7 +72,7 @@ function ChannelInput({
   onRemove: (index: number) => void
   channelUrl: string
 }) {
-  const { watch, setValue } = useFormContext<FormData>()
+  const { watch, setValue, getFieldState } = useFormContext<FormData>()
   const url = watch(`channels.${index}.url`)
   const currentName = watch(`channels.${index}.name`)
   const { data: channelInfo, isLoading } = useChannelInfo(
@@ -50,14 +81,25 @@ function ChannelInput({
   )
 
   useEffect(() => {
-    if (channelInfo?.name && !currentName) {
+    const nameState = getFieldState(`channels.${index}.name`)
+    const urlState = getFieldState(`channels.${index}.url`)
+
+    // Автозаполнение имени — только если пользователь ещё НЕ трогал поле
+    if (channelInfo?.name && !currentName && !nameState.isDirty && !nameState.isTouched) {
       setValue(`channels.${index}.name`, channelInfo.name, { shouldValidate: true })
     }
     // Обновляем URL на нормализованный, если он был изменен
-    if (channelInfo?.normalized_url && channelInfo.normalized_url !== url && url) {
+    // Только если пользователь ещё НЕ редактирует поле URL (иначе это "стирает" ввод)
+    if (
+      channelInfo?.normalized_url &&
+      channelInfo.normalized_url !== url &&
+      url &&
+      !urlState.isDirty &&
+      !urlState.isTouched
+    ) {
       setValue(`channels.${index}.url`, channelInfo.normalized_url, { shouldValidate: true })
     }
-  }, [channelInfo, index, currentName, url, setValue])
+  }, [channelInfo, index, currentName, url, setValue, getFieldState])
 
   return (
     <div className="flex gap-2 items-start">
@@ -120,6 +162,12 @@ export default function EditBotPage() {
       continue_button_text: 'Продолжить',
       channels: [],
       is_active: false,
+      settings: {
+        ui_texts: {
+          ru: { ...DEFAULT_UI_TEXTS.ru },
+          en: { ...DEFAULT_UI_TEXTS.en },
+        },
+      },
     },
   })
 
@@ -132,9 +180,15 @@ export default function EditBotPage() {
   const channels = methods.watch('channels')
 
   // Загружаем данные бота в форму
+  const didHydrateFormRef = useRef(false)
   useEffect(() => {
     if (bot) {
-      const channels = bot.channels || []
+      // Если пользователь уже начал редактировать форму — НЕ перезатираем введённые значения при refetch
+      if (didHydrateFormRef.current && methods.formState.isDirty) {
+        return
+      }
+
+      const channels = Array.isArray(bot.channels) ? [...bot.channels] : []
       // Если есть старый channel_link и его нет в channels, добавляем
       if (bot.channel_link && !channels.some((ch) => ch.url === bot.channel_link)) {
         channels.push({ name: 'Канал', url: bot.channel_link })
@@ -148,13 +202,70 @@ export default function EditBotPage() {
         continue_button_text: bot.continue_button_text || 'Продолжить',
         channels: channels,
         is_active: bot.is_active,
+        settings: {
+          ui_texts: {
+            ru: {
+              channelsIntro:
+                bot.settings?.ui_texts?.ru?.channelsIntro ||
+                bot.settings?.uiTexts?.ru?.channelsIntro ||
+                DEFAULT_UI_TEXTS.ru.channelsIntro,
+              thanks:
+                bot.settings?.ui_texts?.ru?.thanks ||
+                bot.settings?.uiTexts?.ru?.thanks ||
+                DEFAULT_UI_TEXTS.ru.thanks,
+              channelsNotConfigured:
+                bot.settings?.ui_texts?.ru?.channelsNotConfigured ||
+                bot.settings?.uiTexts?.ru?.channelsNotConfigured ||
+                DEFAULT_UI_TEXTS.ru.channelsNotConfigured,
+              chooseChannel:
+                bot.settings?.ui_texts?.ru?.chooseChannel ||
+                bot.settings?.uiTexts?.ru?.chooseChannel ||
+                DEFAULT_UI_TEXTS.ru.chooseChannel,
+            },
+            en: {
+              channelsIntro:
+                bot.settings?.ui_texts?.en?.channelsIntro ||
+                bot.settings?.uiTexts?.en?.channelsIntro ||
+                DEFAULT_UI_TEXTS.en.channelsIntro,
+              thanks:
+                bot.settings?.ui_texts?.en?.thanks ||
+                bot.settings?.uiTexts?.en?.thanks ||
+                DEFAULT_UI_TEXTS.en.thanks,
+              channelsNotConfigured:
+                bot.settings?.ui_texts?.en?.channelsNotConfigured ||
+                bot.settings?.uiTexts?.en?.channelsNotConfigured ||
+                DEFAULT_UI_TEXTS.en.channelsNotConfigured,
+              chooseChannel:
+                bot.settings?.ui_texts?.en?.chooseChannel ||
+                bot.settings?.uiTexts?.en?.chooseChannel ||
+                DEFAULT_UI_TEXTS.en.chooseChannel,
+            },
+          },
+        },
       })
+      didHydrateFormRef.current = true
     }
   }, [bot, methods])
 
   const onSubmit = (data: FormData) => {
+    const prevSettings =
+      bot?.settings && typeof bot.settings === 'object' ? (bot.settings as Record<string, any>) : {}
+    const nextSettings = (data.settings || {}) as any
+    const mergedSettings: Record<string, any> = { ...prevSettings, ...nextSettings }
+
+    // Глубокий merge для ui_texts
+    if (nextSettings?.ui_texts) {
+      mergedSettings.ui_texts = {
+        ...(prevSettings as any).ui_texts,
+        ...nextSettings.ui_texts,
+        ru: { ...(prevSettings as any).ui_texts?.ru, ...nextSettings.ui_texts.ru },
+        en: { ...(prevSettings as any).ui_texts?.en, ...nextSettings.ui_texts.en },
+      }
+    }
+
     const updateData = {
       ...data,
+      settings: mergedSettings,
       channels: data.channels.filter((ch) => ch.name.trim() && ch.url.trim()),
       // Явно преобразуем interaction_delay_seconds в число
       interaction_delay_seconds: typeof data.interaction_delay_seconds === 'string' 
@@ -547,6 +658,88 @@ export default function EditBotPage() {
                 </div>
               </>
             )}
+
+            <div className="border-t border-gray-200 pt-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-3">Тексты сообщений (RU/EN)</h3>
+              <p className="text-sm text-gray-500 mb-4">
+                Эти тексты используются, когда бот показывает кнопки с каналами после нажатия «Продолжить» или по команде
+                /channels. Язык определяется по Telegram <code className="px-1 bg-gray-100 rounded">language_code</code>.
+              </p>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="space-y-3">
+                  <h4 className="font-medium text-gray-900">Русский</h4>
+                  <div>
+                    <label className="block text-sm text-gray-700 mb-1">Текст перед списком каналов</label>
+                    <textarea
+                      rows={2}
+                      {...methods.register('settings.ui_texts.ru.channelsIntro')}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-700 mb-1">Если каналов нет</label>
+                    <textarea
+                      rows={2}
+                      {...methods.register('settings.ui_texts.ru.channelsNotConfigured')}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-700 mb-1">Подпись команды /channels</label>
+                    <textarea
+                      rows={2}
+                      {...methods.register('settings.ui_texts.ru.chooseChannel')}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-700 mb-1">Если каналов нет после «Продолжить»</label>
+                    <textarea
+                      rows={2}
+                      {...methods.register('settings.ui_texts.ru.thanks')}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <h4 className="font-medium text-gray-900">English</h4>
+                  <div>
+                    <label className="block text-sm text-gray-700 mb-1">Intro before channel links</label>
+                    <textarea
+                      rows={2}
+                      {...methods.register('settings.ui_texts.en.channelsIntro')}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-700 mb-1">If no channels configured</label>
+                    <textarea
+                      rows={2}
+                      {...methods.register('settings.ui_texts.en.channelsNotConfigured')}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-700 mb-1">Caption for /channels</label>
+                    <textarea
+                      rows={2}
+                      {...methods.register('settings.ui_texts.en.chooseChannel')}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-700 mb-1">If no channels after “Continue”</label>
+                    <textarea
+                      rows={2}
+                      {...methods.register('settings.ui_texts.en.thanks')}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
 
             <div className="flex items-center">
               <input
