@@ -368,20 +368,14 @@ router.put('/:botId', authenticateToken, async (req: Request, res: Response) => 
     const isRunning = botManager.isRunning(botId);
 
     if (updatedBot.isActive && !isRunning) {
-      // Запускаем бота
-      console.log(`Starting bot ${botId} after update`);
       await botManager.startBot(botId, updatedBot.token);
     } else if (!updatedBot.isActive && isRunning) {
-      // Останавливаем бота
-      console.log(`Stopping bot ${botId} after update`);
       await botManager.stopBot(botId);
     } else if (
       updatedBot.isActive &&
       isRunning &&
       oldIsActive !== updatedBot.isActive
     ) {
-      // Перезапускаем бота при изменении настроек
-      console.log(`Restarting bot ${botId} after update`);
       await botManager.restartBot(botId, updatedBot.token);
     }
 
@@ -609,6 +603,54 @@ router.get('/:botId/users', authenticateToken, async (req: Request, res: Respons
 });
 
 /**
+ * DELETE /api/bots/:botId/users/:userId
+ * Удалить пользователя (строку TelegramUser) из БД.
+ * Если пользователь снова начнет взаимодействовать с ботом — появится заново (создастся новой записью).
+ */
+router.delete('/:botId/users/:userId', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const ownerId = req.user!.userId;
+    const botId = parseInt(req.params.botId, 10);
+    const telegramUserRowId = parseInt(req.params.userId, 10);
+
+    if (isNaN(botId) || isNaN(telegramUserRowId)) {
+      return res.status(400).json({ detail: 'Invalid bot ID or user ID' });
+    }
+
+    // Проверяем, что бот принадлежит пользователю
+    const bot = await prisma.bot.findFirst({
+      where: { id: botId, ownerId },
+    });
+    if (!bot) {
+      return res.status(404).json({ detail: 'Bot not found' });
+    }
+
+    // Проверяем, что пользователь принадлежит этому боту
+    const user = await prisma.telegramUser.findFirst({
+      where: { id: telegramUserRowId, botId },
+      include: { tags: { select: { id: true } } },
+    });
+    if (!user) {
+      return res.status(404).json({ detail: 'User not found' });
+    }
+
+    // Отвязываем теги (на случай строгих ограничений в join-таблице)
+    await prisma.$transaction([
+      prisma.telegramUser.update({
+        where: { id: telegramUserRowId },
+        data: { tags: { set: [] } },
+      }),
+      prisma.telegramUser.delete({ where: { id: telegramUserRowId } }),
+    ]);
+
+    return res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting bot user:', error);
+    return res.status(500).json({ detail: 'Internal server error' });
+  }
+});
+
+/**
  * POST /api/bots/:botId/users/:userId/block
  * Заблокировать или разблокировать пользователя
  */
@@ -666,10 +708,6 @@ router.post(
           },
         },
       });
-
-      console.log(
-        `User ${updatedUser.telegramUserId} status changed to ${newStatus} by user ${userId}`
-      );
 
       return res.json({
         id: updatedUser.id,

@@ -62,13 +62,21 @@ router.post('/register', async (req: Request, res: Response) => {
 
 // Вход
 router.post('/login', async (req: Request, res: Response) => {
+  const timingEnabled = process.env.AUTH_TIMING === '1' || process.env.AUTH_TIMING === 'true';
+  const t0 = timingEnabled ? process.hrtime.bigint() : 0n;
+  const marks: Record<string, number> = {};
+
   try {
     const { email, password } = loginSchema.parse(req.body);
 
     // Находим пользователя
+    const tDb0 = timingEnabled ? process.hrtime.bigint() : 0n;
     const user = await prisma.user.findUnique({
       where: { email },
     });
+    if (timingEnabled) {
+      marks.db_ms = Number(process.hrtime.bigint() - tDb0) / 1e6;
+    }
 
     if (!user || !user.isActive) {
       res.status(401).json({ detail: 'Incorrect email or password' });
@@ -76,15 +84,32 @@ router.post('/login', async (req: Request, res: Response) => {
     }
 
     // Проверяем пароль
+    const tBcrypt0 = timingEnabled ? process.hrtime.bigint() : 0n;
     const isValidPassword = await verifyPassword(password, user.hashedPassword);
+    if (timingEnabled) {
+      marks.bcrypt_ms = Number(process.hrtime.bigint() - tBcrypt0) / 1e6;
+    }
     if (!isValidPassword) {
       res.status(401).json({ detail: 'Incorrect email or password' });
       return;
     }
 
     // Создаем токены
+    const tJwt0 = timingEnabled ? process.hrtime.bigint() : 0n;
     const accessToken = createAccessToken({ userId: user.id, email: user.email });
     const refreshToken = createRefreshToken({ userId: user.id, email: user.email });
+    if (timingEnabled) {
+      marks.jwt_ms = Number(process.hrtime.bigint() - tJwt0) / 1e6;
+    }
+
+    if (timingEnabled) {
+      marks.total_ms = Number(process.hrtime.bigint() - t0) / 1e6;
+      // Показывается в DevTools → Network → Timing (Server-Timing)
+      res.setHeader(
+        'Server-Timing',
+        `db;dur=${marks.db_ms?.toFixed(1)}, bcrypt;dur=${marks.bcrypt_ms?.toFixed(1)}, jwt;dur=${marks.jwt_ms?.toFixed(1)}, total;dur=${marks.total_ms?.toFixed(1)}`
+      );
+    }
 
     res.json({
       access_token: accessToken,

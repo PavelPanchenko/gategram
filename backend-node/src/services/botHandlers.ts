@@ -89,9 +89,6 @@ export function setupBotHandlers(bot: Bot, botId: number): void {
       const lastProcessed = processingStartCommands.get(commandKey)!;
       const timeDiff = now - lastProcessed;
       if (timeDiff < START_COMMAND_COOLDOWN) {
-        console.log(
-          `Ignoring duplicate /start from user ${userId} for bot ${botId} (last processed ${timeDiff}ms ago)`
-        );
         return;
       }
     }
@@ -124,58 +121,29 @@ export function setupBotHandlers(bot: Bot, botId: number): void {
       let source: string | null = null;
       if (ctx.message?.text) {
         const parts = ctx.message.text.split(' ');
-        console.log(`[Bot ${botId}] /start command text: "${ctx.message.text}", parts:`, parts);
-        
         if (parts.length > 1) {
           // Берем первый параметр после /start
           // Декодируем URL-кодирование, если есть
           try {
             source = decodeURIComponent(parts[1]);
-            console.log(`[Bot ${botId}] Decoded source: "${source}"`);
           } catch {
             source = parts[1];
-            console.log(`[Bot ${botId}] Using raw source (decode failed): "${source}"`);
           }
-          
           // Обрабатываем случаи, когда Telegram веб-версия добавляет свои параметры
           // Формат может быть: "tgchat_webkiev" (только системный) или "tgchat_webkiev_tg" (системный + пользовательский)
           if (source.includes('_')) {
             const sourceParts = source.split('_');
-            console.log(`[Bot ${botId}] Source contains underscore, parts:`, sourceParts);
-            
-            // Известные префиксы от веб-версии Telegram
             const webPrefixes = ['tgchat', 'web', 'webkiev', 'android', 'ios'];
-            
-            // Если первая часть - это системный префикс Telegram
             if (webPrefixes.includes(sourceParts[0])) {
-              console.log(`[Bot ${botId}] Found web prefix: "${sourceParts[0]}"`);
-              // Если есть еще части после префиксов - это пользовательский source
               if (sourceParts.length > 2) {
-                // Берем все части после системных префиксов
-                // Например: "tgchat_webkiev_tg" -> "tg"
-                // Или: "web_instagram" -> "instagram"
                 source = sourceParts.slice(2).join('_');
-                console.log(`[Bot ${botId}] Extracted user source after web prefix: "${source}"`);
               } else {
-                // Если только системные префиксы без пользовательского source - игнорируем
                 source = null;
-                console.log(`[Bot ${botId}] Only web prefix found, no user source, setting to null`);
               }
-            } else {
-              console.log(`[Bot ${botId}] No web prefix found, keeping source as is: "${source}"`);
             }
-            // Если это не системный префикс, оставляем как есть (например, "my_source_name")
-          } else {
-            console.log(`[Bot ${botId}] Source has no underscore, keeping as is: "${source}"`);
           }
-        } else {
-          console.log(`[Bot ${botId}] No parameters in /start command`);
         }
-      } else {
-        console.log(`[Bot ${botId}] No message text in /start command`);
       }
-      
-      console.log(`[Bot ${botId}] Final extracted source: "${source}"`);
 
       // Проверяем, существует ли пользователь
       let telegramUser = await prisma.telegramUser.findFirst({
@@ -219,11 +187,6 @@ export function setupBotHandlers(bot: Bot, botId: number): void {
         // Обновляем source, если он был передан
         if (source !== null) {
           updateData.source = source;
-          console.log(`[Bot ${botId}] Updating user ${userId} source to: "${source}"`);
-        } else if (telegramUser.source === null) {
-          // Если source не передан, но у пользователя его нет, оставляем null
-          // (не перезаписываем существующий source на null)
-          console.log(`[Bot ${botId}] No source in request, keeping existing: "${telegramUser.source}"`);
         }
         
         telegramUser = await prisma.telegramUser.update({
@@ -231,8 +194,6 @@ export function setupBotHandlers(bot: Bot, botId: number): void {
           data: updateData,
         });
       }
-      
-      console.log(`[Bot ${botId}] User ${userId} source after update: "${telegramUser.source}"`);
 
       // Обрабатываем триггеры для нового пользователя
       if (isNewUser) {
@@ -525,10 +486,6 @@ export function setupBotHandlers(bot: Bot, botId: number): void {
       const oldStatus = update.old_chat_member.status;
       const newStatus = update.new_chat_member.status;
 
-      console.log(
-        `Bot ${botId}: User ${userId} changed bot status from ${oldStatus} to ${newStatus}`
-      );
-
       // Если пользователь заблокировал бота
       if (newStatus === 'kicked' || newStatus === 'left') {
         await prisma.telegramUser.updateMany({
@@ -541,7 +498,6 @@ export function setupBotHandlers(bot: Bot, botId: number): void {
             lastActivity: new Date(),
           },
         });
-        console.log(`User ${userId} blocked bot ${botId}, status updated to 'blocked'`);
       }
       // Если пользователь разблокировал бота
       else if (newStatus === 'member' && (oldStatus === 'kicked' || oldStatus === 'left')) {
@@ -555,7 +511,6 @@ export function setupBotHandlers(bot: Bot, botId: number): void {
             lastActivity: new Date(),
           },
         });
-        console.log(`User ${userId} unblocked bot ${botId}, status updated to 'active'`);
       }
     } catch (error) {
       console.error(`Error in handle_my_chat_member for bot ${botId}:`, error);

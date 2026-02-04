@@ -25,11 +25,6 @@ export async function processTriggerEvent(
   telegramUserId: number | null = null,
   data: Record<string, any> = {}
 ): Promise<void> {
-  console.log(
-    `Processing trigger event: type=${eventType}, bot_id=${botId}, user_id=${telegramUserId}, data=${JSON.stringify(data)}`
-  );
-
-  // Получаем активные триггеры для этого события
   const triggers = await prisma.trigger.findMany({
     where: {
       botId,
@@ -38,28 +33,17 @@ export async function processTriggerEvent(
     },
   });
 
-  console.log(`Found ${triggers.length} active triggers for event ${eventType} in bot ${botId}`);
-
   if (triggers.length === 0) {
     return;
   }
 
   for (const trigger of triggers) {
     try {
-      console.log(`Processing trigger ${trigger.id} (${trigger.name}) for event ${eventType}`);
-
-      // Проверяем условия триггера
       if (!(await checkConditions(trigger, telegramUserId, data))) {
-        console.log(`Trigger ${trigger.id} conditions not met, skipping`);
         continue;
       }
 
-      console.log(`Trigger ${trigger.id} conditions met, executing actions`);
-
-      // Выполняем действия
       await executeActions(trigger, botId, telegramUserId, data);
-
-      console.log(`Trigger ${trigger.id} executed successfully`);
     } catch (error) {
       console.error(`Error processing trigger ${trigger.id}:`, error);
     }
@@ -164,14 +148,10 @@ async function executeActions(
   const actions = (trigger.actions as any[]) || [];
 
   if (actions.length > 0) {
-    // Новый формат: массив действий в поле actions
-    console.log(`Executing ${actions.length} actions for trigger ${trigger.id}`);
     for (let idx = 0; idx < actions.length; idx++) {
       const action = actions[idx];
       const actionType = action.type;
       const actionParams = action.data || {};
-
-      console.log(`Executing action ${idx + 1}/${actions.length}: type=${actionType}`);
 
       if (actionType === TriggerAction.SEND_MESSAGE) {
         await sendMessageAction(trigger, botId, telegramUserId, actionParams, data);
@@ -182,8 +162,6 @@ async function executeActions(
       }
     }
   } else {
-    // Старый формат: одно действие в action_type/action_data (для обратной совместимости)
-    console.log(`Using legacy format for trigger ${trigger.id}: action_type=${trigger.actionType}`);
     const actionData = (trigger.actionData as Record<string, any>) || {};
 
     if (trigger.actionType === TriggerAction.SEND_MESSAGE) {
@@ -241,7 +219,6 @@ async function sendMessageAction(
 
   try {
     await botInstance.api.sendMessage(telegramUserId, messageText);
-    console.log(`Sent message to user ${telegramUserId} via trigger ${trigger.id}`);
   } catch (error) {
     console.error(`Failed to send message to user ${telegramUserId}:`, error);
   }
@@ -294,7 +271,6 @@ async function addTagAction(
           },
         },
       });
-      console.log(`Added tag ${tag.name} to user ${telegramUserId}`);
     }
   }
 }
@@ -346,7 +322,6 @@ async function removeTagAction(
           },
         },
       });
-      console.log(`Removed tag ${tag.name} from user ${telegramUserId}`);
     }
   }
 }

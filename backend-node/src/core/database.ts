@@ -21,13 +21,6 @@ if (process.env.TEST_DATABASE_URL && (process.env.NODE_ENV === 'test' || process
 // Устанавливаем для Prisma
 process.env.DATABASE_URL = databaseUrl;
 
-// Маскируем пароль для логирования
-const maskedUrl = databaseUrl.replace(/:([^:@]+)@/, ':****@');
-
-if (process.env.NODE_ENV !== 'production') {
-  console.log(`🔗 Database URL: ${maskedUrl}`);
-}
-
 const prisma = new PrismaClient({
   datasources: {
     db: {

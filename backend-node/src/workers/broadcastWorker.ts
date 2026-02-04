@@ -31,7 +31,6 @@ export const broadcastWorker = new Worker(
   'broadcasts',
   async (job: Job) => {
     const broadcastId = job.data.broadcastId;
-    console.log(`Processing broadcast ${broadcastId}`);
 
     // Получаем рассылку из БД
     const broadcast = await prisma.broadcast.findUnique({
@@ -48,7 +47,6 @@ export const broadcastWorker = new Worker(
 
     // Проверяем статус
     if (!['pending', 'scheduled'].includes(broadcast.status)) {
-      console.log(`Broadcast ${broadcastId} has status ${broadcast.status}, skipping`);
       return;
     }
 
@@ -57,9 +55,6 @@ export const broadcastWorker = new Worker(
       const now = new Date();
       const scheduledTime = new Date(broadcast.scheduledAt);
       if (scheduledTime > now) {
-        console.log(
-          `Broadcast ${broadcastId} is scheduled for ${scheduledTime}, current time is ${now}, skipping`
-        );
         return;
       }
     }
@@ -95,9 +90,7 @@ export const broadcastWorker = new Worker(
           totalUsers: 0,
         },
       });
-      // Медиа больше не нужно — удаляем сразу
       deleteAllBroadcastMedia(broadcast);
-      console.log(`No active users for bot ${broadcast.botId}`);
       return;
     }
 
@@ -165,10 +158,7 @@ export const broadcastWorker = new Worker(
       },
     });
 
-    // Удаляем медиа файлы после завершения (и одиночные, и группы)
     deleteAllBroadcastMedia(broadcast);
-
-    console.log(`Broadcast ${broadcastId} completed: ${sentCount} sent, ${failedCount} failed`);
   },
   {
     connection,
@@ -350,11 +340,9 @@ async function sendMessageToUser(
         success: true,
       },
     });
-    
-    if (messageId) {
-      console.log(`[Broadcast Worker] Saved message_id ${messageId} for user ${user.telegramUserId} in broadcast ${broadcast.id}`);
-    } else {
-      console.warn(`[Broadcast Worker] Warning: message_id is null for user ${user.telegramUserId} in broadcast ${broadcast.id}`);
+
+    if (!messageId) {
+      console.warn(`[Broadcast Worker] message_id is null for user ${user.telegramUserId} in broadcast ${broadcast.id}`);
     }
 
     return true;
@@ -417,7 +405,6 @@ function deleteMediaFile(mediaUrl: string): boolean {
   for (const filePath of possiblePaths) {
     if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
       fs.unlinkSync(filePath);
-      console.log(`Deleted media file: ${filePath}`);
       return true;
     }
   }
@@ -441,13 +428,8 @@ export const scheduledBroadcastWorker = new Worker(
       },
     });
 
-    console.log(`Found ${scheduledBroadcasts.length} scheduled broadcasts ready to send`);
-
     for (const broadcast of scheduledBroadcasts) {
       try {
-        console.log(
-          `Starting scheduled broadcast ${broadcast.id} (scheduled for ${broadcast.scheduledAt})`
-        );
         // Делаем операцию идемпотентной:
         // 1) переводим scheduled -> pending (только если всё ещё scheduled)
         // 2) добавляем job с уникальным jobId, чтобы избежать дублей

@@ -5,7 +5,6 @@ import { config } from './core/config';
 import { errorHandler } from './middleware/errorHandler';
 import prisma from './core/database';
 import { botManager } from './services/botManager';
-import './workers/broadcastWorker'; // Инициализируем workers
 import { scheduledBroadcastQueue } from './queues/broadcastQueue';
 import authRouter from './api/auth';
 import healthRouter from './api/health';
@@ -46,6 +45,8 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Delete-Messages'],
   exposedHeaders: ['*'],
+  // Кэшируем preflight в браузере, чтобы уменьшить задержки на cross-origin POST/PUT/DELETE
+  maxAge: 86400,
 }));
 
 app.use(express.json());
@@ -85,6 +86,13 @@ app.listen(PORT, '0.0.0.0', async () => {
   console.log(`🚀 GateGram Node.js Backend running on port ${PORT}`);
   console.log(`📝 Environment: ${config.nodeEnv}`);
   console.log(`🌐 CORS origins: ${config.corsOrigins.join(', ')}`);
+
+  // Прогреваем подключение Prisma, чтобы первый запрос (например /auth/login) не ловил cold-start
+  try {
+    await prisma.$connect();
+  } catch (e) {
+    console.error('❌ Prisma connect failed during startup:', e);
+  }
 
   // Запускаем периодическую проверку запланированных рассылок (BullMQ repeatable job)
   try {

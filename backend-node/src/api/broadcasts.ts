@@ -75,7 +75,6 @@ function deleteMediaFile(mediaUrl: string | null): boolean {
     for (const filePath of possiblePaths) {
       if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
         fs.unlinkSync(filePath);
-        console.log(`Deleted media file: ${filePath}`);
         return true;
       }
     }
@@ -596,9 +595,7 @@ router.delete('/:broadcastId', authenticateToken, async (req: Request, res: Resp
 
     // Если нужно удалить сообщения из бота
     if (deleteMessages) {
-      console.log(`[Delete Broadcast] Attempting to delete messages for broadcast ${broadcastId}`);
       try {
-        // Получаем все логи рассылки с message_id
         const logs = await prisma.broadcastLog.findMany({
           where: {
             broadcastId,
@@ -607,17 +604,12 @@ router.delete('/:broadcastId', authenticateToken, async (req: Request, res: Resp
           },
         });
 
-        console.log(`[Delete Broadcast] Found ${logs.length} logs with message_id for broadcast ${broadcastId}`);
-        
         if (logs.length === 0) {
-          // Проверяем, есть ли вообще логи
           const allLogs = await prisma.broadcastLog.findMany({
             where: { broadcastId },
           });
-          console.log(`[Delete Broadcast] Total logs for broadcast ${broadcastId}: ${allLogs.length}`);
           if (allLogs.length > 0) {
             const logsWithMessageId = allLogs.filter(log => log.messageId !== null);
-            console.log(`[Delete Broadcast] Logs with message_id: ${logsWithMessageId.length}`);
             if (logsWithMessageId.length === 0) {
               console.warn(`[Delete Broadcast] No message_id found in logs. This might mean messages were sent before message_id tracking was added.`);
             }
@@ -625,31 +617,21 @@ router.delete('/:broadcastId', authenticateToken, async (req: Request, res: Resp
         }
 
         if (logs.length > 0) {
-          // Получаем экземпляр бота из botManager
           const { botManager } = await import('../services/botManager');
           const bot = botManager.getBot(broadcast.botId);
           const isRunning = botManager.isRunning(broadcast.botId);
-
-          console.log(`[Delete Broadcast] Bot ${broadcast.botId} - isRunning: ${isRunning}, bot instance: ${bot ? 'exists' : 'null'}`);
 
           if (bot && isRunning) {
             let deletedCount = 0;
             let failedCount = 0;
 
-            // Удаляем сообщения батчами
             for (const log of logs) {
               try {
                 if (log.messageId) {
                   const chatId = Number(log.telegramUserId);
                   const msgId = log.messageId;
-                  console.log(`[Delete Broadcast] Attempting to delete message ${msgId} for user ${chatId} (chat_id: ${chatId})`);
-                  
-                  // Вызываем deleteMessage через API
-                  const result = await bot.api.deleteMessage(chatId, msgId);
-                  console.log(`[Delete Broadcast] deleteMessage API call result:`, result);
-                  
+                  await bot.api.deleteMessage(chatId, msgId);
                   deletedCount++;
-                  console.log(`[Delete Broadcast] Successfully deleted message ${msgId} for user ${chatId}`);
                 } else {
                   console.warn(`[Delete Broadcast] Log ${log.id} has null messageId, skipping`);
                 }
@@ -657,43 +639,29 @@ router.delete('/:broadcastId', authenticateToken, async (req: Request, res: Resp
                 failedCount++;
                 const errorMsg = error.description || error.message || String(error);
                 const errorCode = error.error_code || 'unknown';
-                
+
                 console.error(
                   `[Delete Broadcast] Error deleting message ${log.messageId} for user ${log.telegramUserId}:`,
-                  {
-                    error: errorMsg,
-                    code: errorCode,
-                    fullError: error
-                  }
+                  { error: errorMsg, code: errorCode }
                 );
-                
-                // Игнорируем ошибки, если сообщение уже удалено или пользователь заблокировал бота
-                const isIgnorableError = 
+
+                const isIgnorableError =
                   errorMsg.includes('message to delete not found') ||
                   errorMsg.includes('message can\'t be deleted') ||
                   errorMsg.includes('chat not found') ||
                   errorMsg.includes('message not found') ||
                   errorMsg.includes('Bad Request: message to delete not found') ||
                   errorCode === 400;
-                
+
                 if (!isIgnorableError) {
-                  console.error(
-                    `[Delete Broadcast] Unexpected error deleting message ${log.messageId}:`,
-                    {
-                      error: errorMsg,
-                      code: errorCode,
-                      stack: error.stack
-                    }
-                  );
-                } else {
-                  console.log(`[Delete Broadcast] Ignoring expected error: ${errorMsg}`);
+                  console.error(`[Delete Broadcast] Unexpected error:`, errorMsg, error.stack);
                 }
               }
             }
 
-            console.log(
-              `[Delete Broadcast] Completed: ${deletedCount} deleted, ${failedCount} failed for broadcast ${broadcastId}`
-            );
+            if (debug) {
+              console.log(`[Delete Broadcast] Completed: ${deletedCount} deleted, ${failedCount} failed for broadcast ${broadcastId}`);
+            }
           } else {
             console.warn(
               `[Delete Broadcast] Bot ${broadcast.botId} is not running or bot instance is null, cannot delete messages for broadcast ${broadcastId}`
@@ -704,13 +672,8 @@ router.delete('/:broadcastId', authenticateToken, async (req: Request, res: Resp
         }
       } catch (error) {
         console.error(`[Delete Broadcast] Error deleting messages for broadcast ${broadcastId}:`, error);
-        if (error instanceof Error) {
-          console.error(`[Delete Broadcast] Error stack:`, error.stack);
-        }
         // Продолжаем удаление рассылки даже если не удалось удалить сообщения
       }
-    } else {
-      console.log(`[Delete Broadcast] delete_messages parameter is false, skipping message deletion`);
     }
 
     // Удаляем медиа файл, если он есть

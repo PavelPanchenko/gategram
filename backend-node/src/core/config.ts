@@ -9,13 +9,6 @@ import { existsSync } from 'fs';
 // В обоих случаях нужно подняться на 3 уровня вверх до корня проекта (GateGram)
 const projectRoot = path.resolve(__dirname, '../../..'); // core -> src/dist -> backend-node -> GateGram
 
-// Отладочное логирование (только в dev режиме)
-if (process.env.NODE_ENV !== 'production') {
-  console.log(`🔍 Config debug:`);
-  console.log(`   __dirname: ${__dirname}`);
-  console.log(`   projectRoot: ${projectRoot}`);
-}
-
 // Пытаемся загрузить переменные из разных мест (в порядке приоритета)
 const envPaths: string[] = [
   process.env.ENV_FILE_PATH || '',              // Явно указанный путь
@@ -27,15 +20,9 @@ const envPaths: string[] = [
 // Загружаем первый найденный файл
 let loadedEnvPath: string | null = null;
 for (const envPath of envPaths) {
-  if (process.env.NODE_ENV !== 'production') {
-    console.log(`   Checking: ${envPath} ${existsSync(envPath) ? '✅' : '❌'}`);
-  }
   if (existsSync(envPath)) {
     dotenv.config({ path: envPath });
     loadedEnvPath = envPath;
-    if (process.env.NODE_ENV !== 'production') {
-      console.log(`✅ Loaded .env from: ${envPath}`);
-    }
     break;
   }
 }
@@ -81,12 +68,7 @@ function normalizeDatabaseUrl(url: string): string {
     
     // Проверяем, что теперь URL валидный
     try {
-      const parsedUrl = new URL(normalizedUrl);
-      
-      if (process.env.NODE_ENV !== 'production' && password !== encodedPassword) {
-        console.log('🔧 Encoded special characters in database password');
-      }
-      
+      new URL(normalizedUrl);
       return normalizedUrl;
     } catch (error) {
       // Если все еще не работает, логируем и возвращаем исходный
@@ -203,10 +185,6 @@ try {
     throw new Error(`Invalid port number: ${dbUrl.port}`);
   }
   
-  if (process.env.NODE_ENV !== 'production') {
-    const maskedUrl = `${dbUrl.protocol}//${dbUrl.username || '***'}:****@${dbUrl.hostname}:${dbUrl.port || '5432'}/${dbUrl.pathname.slice(1)}`;
-    console.log(`✅ DATABASE_URL format is valid: ${maskedUrl}`);
-  }
 } catch (error) {
   console.error('❌ DATABASE_URL has invalid format!');
   console.error('   Error:', error instanceof Error ? error.message : String(error));
