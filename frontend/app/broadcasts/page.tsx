@@ -83,7 +83,6 @@ export default function BroadcastsPage() {
 
       // action === 'delete'
       const shouldDeleteMessages = deleteMessages
-      console.log('[Frontend] Deleting broadcast', broadcastId, 'with deleteMessages:', shouldDeleteMessages)
       await deleteBroadcast.mutateAsync({
         broadcastId,
         deleteMessages: shouldDeleteMessages,

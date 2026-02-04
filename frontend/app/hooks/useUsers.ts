@@ -68,3 +68,16 @@ export function useSendMessageToUser() {
   })
 }
 
+export function useDeleteBotUser() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ botId, userId }: { botId: number; userId: number }) =>
+      api.deleteBotUser(botId, userId),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['bots', variables.botId, 'users'] })
+      queryClient.invalidateQueries({ queryKey: ['users', 'all'] })
+    },
+  })
+}
+

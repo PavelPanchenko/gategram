@@ -305,21 +305,6 @@ class ApiClient {
 
     const url = `${this.baseUrl}${endpoint}`
 
-    // Логируем для DELETE запросов с delete_messages
-    if (this.isDev() && options.method === 'DELETE' && endpoint.includes('broadcasts')) {
-      const hasDeleteMessages = headers['X-Delete-Messages'] === 'true' || 
-                                (typeof options.body === 'string' && options.body.includes('delete_messages'));
-      console.log('[Frontend API] DELETE request details:', { 
-        url, 
-        method: options.method,
-        headers: JSON.stringify(headers),
-        body: options.body,
-        bodyType: typeof options.body,
-        hasDeleteMessages,
-        'X-Delete-Messages header': headers['X-Delete-Messages'],
-      });
-    }
-
     // Таймаут для запросов (30 секунд по умолчанию, для /users - 60 секунд)
     const timeoutMs = endpoint.includes('/users') ? 60000 : 30000
     const controller = new AbortController()
@@ -699,20 +684,11 @@ class ApiClient {
 
   async deleteBroadcast(broadcastId: number, deleteMessages: boolean = false): Promise<void> {
     const url = `/broadcasts/${broadcastId}`
-    console.log('[Frontend API] deleteBroadcast called with:', { broadcastId, deleteMessages, url })
-    
-    // Отправляем параметр через заголовок (наиболее надежный способ для DELETE)
     const headers: Record<string, string> = {}
-    
+
     if (deleteMessages) {
-      // Отправляем через заголовок (приоритетный способ)
       headers['X-Delete-Messages'] = 'true'
-      // Также отправляем через body для совместимости
       const body = JSON.stringify({ delete_messages: true })
-      console.log('[Frontend API] Sending delete_messages via header and body:', { 
-        header: headers['X-Delete-Messages'],
-        body 
-      })
       return this.request<void>(url, {
         method: 'DELETE',
         headers,
@@ -751,6 +727,12 @@ class ApiClient {
     return this.request<TelegramUser[]>(`/bots/${botId}/users?${params.toString()}`)
   }
 
+  async deleteBotUser(botId: number, userId: number): Promise<void> {
+    return this.request<void>(`/bots/${botId}/users/${userId}`, {
+      method: 'DELETE',
+    })
+  }
+
   async getAllUsers(
     botId?: number,
     statusFilter?: string,
@@ -765,6 +747,52 @@ class ApiClient {
     params.append('skip', skip.toString())
     params.append('limit', limit.toString())
     return this.request<TelegramUser[]>(`/users?${params.toString()}`)
+  }
+
+  async exportUsersCsv(
+    botId?: number,
+    statusFilter?: string,
+    sourceFilter?: string
+  ): Promise<{ blob: Blob; filename: string }> {
+    const params = new URLSearchParams()
+    if (botId) params.append('bot_id', botId.toString())
+    if (statusFilter) params.append('status_filter', statusFilter)
+    if (sourceFilter) params.append('source_filter', sourceFilter)
+
+    const token = this.getToken()
+    const headers: Record<string, string> = {}
+    if (token) headers['Authorization'] = `Bearer ${token}`
+
+    const url = `${this.baseUrl}/users/export?${params.toString()}`
+    let response = await fetch(url, {
+      method: 'GET',
+      headers,
+      credentials: 'include',
+    })
+
+    if (response.status === 401) {
+      const newToken = await refreshAccessToken()
+      if (newToken) {
+        headers['Authorization'] = `Bearer ${newToken}`
+        response = await fetch(url, {
+          method: 'GET',
+          headers,
+          credentials: 'include',
+        })
+      }
+    }
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => '')
+      throw new Error(text || `HTTP error! status: ${response.status}`)
+    }
+
+    const disposition = response.headers.get('content-disposition') || ''
+    const match = disposition.match(/filename=\"?([^\";]+)\"?/i)
+    const filename = match?.[1] || 'users.csv'
+    const blob = await response.blob()
+
+    return { blob, filename }
   }
 
   async blockUser(botId: number, userId: number, blocked: boolean): Promise<TelegramUser> {

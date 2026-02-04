@@ -6,11 +6,11 @@ import DashboardLayout from '@/app/components/DashboardLayout'
 import { api, TelegramUser } from '@/app/lib/api'
 import { showToast, confirmAction } from '@/app/utils/toast'
 import Link from 'next/link'
-import { MessageCircle, Lock, Unlock, Loader2, X, Image as ImageIcon, Video, Music, File, Users, Bot as BotIcon, Tag } from 'lucide-react'
+import { MessageCircle, Lock, Unlock, Loader2, X, Image as ImageIcon, Video, Music, File, Users, Bot as BotIcon, Tag, Download, Trash2 } from 'lucide-react'
 import { useBots } from '@/app/hooks/useBots'
 import { useTags } from '@/app/hooks/useTags'
 import { useAssignTagsToUser } from '@/app/hooks/useTags'
-import { useAllUsers, useBlockUser, useSendMessageToUser } from '@/app/hooks/useUsers'
+import { useAllUsers, useBlockUser, useDeleteBotUser, useSendMessageToUser } from '@/app/hooks/useUsers'
 // Tooltip component removed - using title attribute instead
 
 function getUserDisplayName(user: TelegramUser) {
@@ -40,6 +40,7 @@ function UserActions({
   const assignTagsMutation = useAssignTagsToUser()
   const sendMessageMutation = useSendMessageToUser()
   const blockUserMutation = useBlockUser()
+  const deleteUserMutation = useDeleteBotUser()
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -132,6 +133,23 @@ function UserActions({
     )
   }
 
+  const handleDelete = async () => {
+    confirmAction(
+      `Удалить пользователя ${getUserDisplayName(user)} из базы? Он появится снова, если начнет взаимодействовать с ботом.`,
+      async () => {
+        try {
+          await deleteUserMutation.mutateAsync({
+            botId: user.bot_id,
+            userId: user.id,
+          })
+          showToast.success('Пользователь удалён')
+        } catch (err: any) {
+          showToast.error(err.message || 'Ошибка при удалении пользователя')
+        }
+      }
+    )
+  }
+
   return (
     <>
       <div className="flex gap-2">
@@ -161,6 +179,14 @@ function UserActions({
           }`}
         >
           {blockUserMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : user.status === 'blocked' ? <Unlock size={16} /> : <Lock size={16} />}
+        </button>
+        <button
+          onClick={handleDelete}
+          disabled={deleteUserMutation.isPending}
+          title="Удалить пользователя"
+          className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          {deleteUserMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
         </button>
       </div>
 
@@ -334,6 +360,7 @@ export default function UsersPage() {
   const [selectedBotId, setSelectedBotId] = useState<number | undefined>(undefined)
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [sourceFilter, setSourceFilter] = useState<string>('')
+  const [isExporting, setIsExporting] = useState(false)
   const router = useRouter()
 
   const { data: bots } = useBots()
@@ -347,6 +374,30 @@ export default function UsersPage() {
 
   // Собираем уникальные источники
   const sources = Array.from(new Set(users.map((u) => u.source).filter(Boolean))) as string[]
+
+  const handleExport = async () => {
+    try {
+      setIsExporting(true)
+      const { blob, filename } = await api.exportUsersCsv(
+        selectedBotId,
+        statusFilter || undefined,
+        sourceFilter || undefined
+      )
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+      showToast.success('Пользователи выгружены')
+    } catch (err: any) {
+      showToast.error(err?.message || 'Ошибка выгрузки пользователей')
+    } finally {
+      setIsExporting(false)
+    }
+  }
 
   // Инициализация bot_id из query параметров
   useEffect(() => {
@@ -408,17 +459,28 @@ export default function UsersPage() {
               }
             </p>
           </div>
-          {selectedBotId && (
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
             <button
-              onClick={() => {
-                setSelectedBotId(undefined)
-                router.push('/users')
-              }}
-              className="px-3 py-2 sm:px-4 sm:py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-xs sm:text-sm font-medium transition-colors whitespace-nowrap"
+              onClick={handleExport}
+              disabled={isExporting}
+              className="px-3 py-2 sm:px-4 sm:py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed text-xs sm:text-sm font-medium transition-colors whitespace-nowrap inline-flex items-center justify-center gap-2"
+              title="Скачать CSV с текущими фильтрами"
             >
-              Показать всех
+              {isExporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+              Выгрузить CSV
             </button>
-          )}
+            {selectedBotId && (
+              <button
+                onClick={() => {
+                  setSelectedBotId(undefined)
+                  router.push('/users')
+                }}
+                className="px-3 py-2 sm:px-4 sm:py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-xs sm:text-sm font-medium transition-colors whitespace-nowrap"
+              >
+                Показать всех
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Фильтры */}

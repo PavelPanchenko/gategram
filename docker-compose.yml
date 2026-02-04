@@ -14,17 +14,25 @@ services:
     # Переменные POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB передаются через env_file
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    # Слушаем только localhost — снаружи к БД не подключаться (меньше логов "postgres" и сканов)
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
+    command: ["postgres", "-c", "log_min_messages=warning", "-c", "log_checkpoints=off"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "2"
 
   redis:
     image: redis:7-alpine
     container_name: gategram_redis
+    command: redis-server --loglevel warning
     ports:
       - "6379:6379"
     volumes:
@@ -34,12 +42,22 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "2"
 
   backend-node:
     build:
       context: ./backend-node
       dockerfile: Dockerfile
     container_name: gategram_backend_node
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     env_file:
       - ./.env
     # Все переменные читаются из .env через env_file
@@ -66,12 +84,41 @@ services:
       && if [ \"${INIT_DB:-0}\" = \"1\" ]; then npx prisma db push --accept-data-loss; fi
       && npm start"
 
+  backend-worker:
+    build:
+      context: ./backend-node
+      dockerfile: Dockerfile
+    container_name: gategram_backend_worker
+    env_file:
+      - ./.env
+    environment:
+      - NODE_ENV=production
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL_HOST=postgres
+      - DATABASE_URL_PORT=5432
+    volumes:
+      - backend_media:/app/media
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >
+      sh -c "npm run build
+      && export DATABASE_URL=\"$(node -e 'const u=new URL(process.env.DATABASE_URL); if(process.env.DATABASE_URL_HOST) u.hostname=process.env.DATABASE_URL_HOST; if(process.env.DATABASE_URL_PORT) u.port=process.env.DATABASE_URL_PORT; console.log(u.toString());')\"
+      && node dist/worker.js"
+
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
       # Переменные читаются из frontend/.env.local, который копируется в контейнер
     container_name: gategram_frontend
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     volumes:
       - /app/node_modules
       - /app/.next
