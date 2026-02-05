@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense, useEffect, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import DashboardLayout from '@/app/components/DashboardLayout'
 import { api, TelegramUser } from '@/app/lib/api'
 import { showToast, confirmAction } from '@/app/utils/toast'
@@ -10,7 +10,7 @@ import { MessageCircle, Lock, Unlock, Loader2, X, Image as ImageIcon, Video, Mus
 import { useBots } from '@/app/hooks/useBots'
 import { useTags } from '@/app/hooks/useTags'
 import { useAssignTagsToUser } from '@/app/hooks/useTags'
-import { useAllUsers, useBlockUser, useDeleteBotUser, useSendMessageToUser } from '@/app/hooks/useUsers'
+import { useAllUsersPaged, useBlockUser, useDeleteBotUser, useSendMessageToUser } from '@/app/hooks/useUsers'
 // Tooltip component removed - using title attribute instead
 
 function getUserDisplayName(user: TelegramUser) {
@@ -356,19 +356,29 @@ function UserActions({
   )
 }
 
-export default function UsersPage() {
+function UsersPageInner() {
   const [selectedBotId, setSelectedBotId] = useState<number | undefined>(undefined)
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [sourceFilter, setSourceFilter] = useState<string>('')
+  const [page, setPage] = useState<number>(1)
+  const [pageSize, setPageSize] = useState<number>(100)
   const [isExporting, setIsExporting] = useState(false)
   const router = useRouter()
+  const searchParams = useSearchParams()
 
   const { data: bots } = useBots()
-  const { data: users = [], isLoading: loading, error: queryError } = useAllUsers(
+  const { data, isLoading: loading, error: queryError } = useAllUsersPaged(
     selectedBotId,
     statusFilter || undefined,
-    sourceFilter || undefined
+    sourceFilter || undefined,
+    page,
+    pageSize
   )
+  const users = data?.items || []
+  const total = data?.total ?? 0
+  const totalPages = Math.max(1, Math.ceil(total / pageSize))
+  const counts = data?.counts || {}
+  const totalAll = (counts.active || 0) + (counts.blocked || 0) + (counts.left || 0)
 
   const error = queryError ? (queryError as Error).message : ''
 
@@ -399,19 +409,45 @@ export default function UsersPage() {
     }
   }
 
-  // Инициализация bot_id из query параметров
+  // Синхронизация фильтров/страницы из query параметров (ссылки)
   useEffect(() => {
-    if (selectedBotId) return
-    if (typeof window !== 'undefined') {
-      const searchParams = new URLSearchParams(window.location.search)
-      if (searchParams.has('bot_id')) {
-        const botIdFromUrl = parseInt(searchParams.get('bot_id') || '0')
-        if (botIdFromUrl && !selectedBotId) {
-          setSelectedBotId(botIdFromUrl)
-        }
-      }
-    }
-  }, [selectedBotId])
+    const botIdRaw = searchParams.get('bot_id')
+    const statusRaw = searchParams.get('status_filter') || ''
+    const sourceRaw = searchParams.get('source_filter') || ''
+    const pageRaw = searchParams.get('page') || '1'
+    const pageSizeRaw = searchParams.get('page_size') || '100'
+
+    const botIdParsed = botIdRaw ? parseInt(botIdRaw, 10) : undefined
+    const pageParsed = parseInt(pageRaw, 10)
+    const pageSizeParsed = parseInt(pageSizeRaw, 10)
+
+    setSelectedBotId(Number.isFinite(botIdParsed as any) && (botIdParsed as any) > 0 ? botIdParsed : undefined)
+    setStatusFilter(statusRaw)
+    setSourceFilter(sourceRaw)
+    setPage(Number.isFinite(pageParsed) && pageParsed > 0 ? pageParsed : 1)
+    setPageSize(Number.isFinite(pageSizeParsed) && pageSizeParsed > 0 ? pageSizeParsed : 100)
+  }, [searchParams])
+
+  const updateUrl = (next: {
+    botId?: number
+    status?: string
+    source?: string
+    page?: number
+    pageSize?: number
+  }) => {
+    const p = new URLSearchParams(searchParams.toString())
+    if (next.botId) p.set('bot_id', String(next.botId))
+    else p.delete('bot_id')
+    if (next.status) p.set('status_filter', next.status)
+    else p.delete('status_filter')
+    if (next.source) p.set('source_filter', next.source)
+    else p.delete('source_filter')
+    const newPage = next.page && next.page > 0 ? next.page : 1
+    p.set('page', String(newPage))
+    const newPageSize = next.pageSize && next.pageSize > 0 ? next.pageSize : pageSize
+    p.set('page_size', String(newPageSize))
+    router.push(`/users?${p.toString()}`)
+  }
 
   const getStatusBadge = (status: string) => {
     const colors: Record<string, string> = {
@@ -492,12 +528,14 @@ export default function UsersPage() {
               onChange={(e) => {
                 const botId = e.target.value ? parseInt(e.target.value) : undefined
                 setSelectedBotId(botId)
-                // Обновляем URL
-                if (botId) {
-                  router.push(`/users?bot_id=${botId}`)
-                } else {
-                  router.push('/users')
-                }
+                setPage(1)
+                updateUrl({
+                  botId,
+                  status: statusFilter || undefined,
+                  source: sourceFilter || undefined,
+                  page: 1,
+                  pageSize,
+                })
               }}
               className="w-full px-2 sm:px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
             >
@@ -513,7 +551,18 @@ export default function UsersPage() {
             <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Статус</label>
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+              onChange={(e) => {
+                const v = e.target.value
+                setStatusFilter(v)
+                setPage(1)
+                updateUrl({
+                  botId: selectedBotId,
+                  status: v || undefined,
+                  source: sourceFilter || undefined,
+                  page: 1,
+                  pageSize,
+                })
+              }}
               className="w-full px-2 sm:px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
             >
               <option value="">Все статусы</option>
@@ -526,7 +575,18 @@ export default function UsersPage() {
             <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Источник</label>
             <select
               value={sourceFilter}
-              onChange={(e) => setSourceFilter(e.target.value)}
+              onChange={(e) => {
+                const v = e.target.value
+                setSourceFilter(v)
+                setPage(1)
+                updateUrl({
+                  botId: selectedBotId,
+                  status: statusFilter || undefined,
+                  source: v || undefined,
+                  page: 1,
+                  pageSize,
+                })
+              }}
               className="w-full px-2 sm:px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
             >
               <option value="">Все источники</option>
@@ -535,6 +595,31 @@ export default function UsersPage() {
                   {source}
                 </option>
               ))}
+            </select>
+          </div>
+          <div className="flex-1 min-w-0">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">На странице</label>
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                const v = parseInt(e.target.value, 10)
+                const nextSize = Number.isFinite(v) && v > 0 ? v : 100
+                setPageSize(nextSize)
+                setPage(1)
+                updateUrl({
+                  botId: selectedBotId,
+                  status: statusFilter || undefined,
+                  source: sourceFilter || undefined,
+                  page: 1,
+                  pageSize: nextSize,
+                })
+              }}
+              className="w-full px-2 sm:px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+            >
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+              <option value={200}>200</option>
+              <option value={500}>500</option>
             </select>
           </div>
         </div>
@@ -546,7 +631,7 @@ export default function UsersPage() {
               <Users size={16} className="text-gray-500 sm:w-5 sm:h-5" />
               <div className="text-xs sm:text-sm text-gray-500">Всего</div>
             </div>
-            <div className="text-xl sm:text-2xl font-bold">{users.length}</div>
+            <div className="text-xl sm:text-2xl font-bold">{totalAll || total}</div>
           </div>
           <div className="bg-white p-3 sm:p-4 rounded-lg border border-gray-200">
             <div className="flex items-center gap-1 sm:gap-2 mb-1 sm:mb-2">
@@ -554,7 +639,7 @@ export default function UsersPage() {
               <div className="text-xs sm:text-sm text-gray-500">Активных</div>
             </div>
             <div className="text-xl sm:text-2xl font-bold text-green-600">
-              {users.filter((u) => u.status === 'active').length}
+              {counts.active ?? users.filter((u) => u.status === 'active').length}
             </div>
           </div>
           <div className="bg-white p-3 sm:p-4 rounded-lg border border-gray-200">
@@ -563,7 +648,7 @@ export default function UsersPage() {
               <div className="text-xs sm:text-sm text-gray-500">Заблокированных</div>
             </div>
             <div className="text-xl sm:text-2xl font-bold text-red-600">
-              {users.filter((u) => u.status === 'blocked').length}
+              {counts.blocked ?? users.filter((u) => u.status === 'blocked').length}
             </div>
           </div>
           <div className="bg-white p-3 sm:p-4 rounded-lg border border-gray-200">
@@ -572,7 +657,7 @@ export default function UsersPage() {
               <div className="text-xs sm:text-sm text-gray-500">Покинувших</div>
             </div>
             <div className="text-xl sm:text-2xl font-bold text-gray-600">
-              {users.filter((u) => u.status === 'left').length}
+              {counts.left ?? users.filter((u) => u.status === 'left').length}
             </div>
           </div>
         </div>
@@ -758,8 +843,92 @@ export default function UsersPage() {
             </>
           )}
         </div>
+
+        {/* Пагинация (ссылки) */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="text-sm text-gray-600">
+            Всего: <span className="font-medium">{total}</span> • Страница{' '}
+            <span className="font-medium">{page}</span> из{' '}
+            <span className="font-medium">{totalPages}</span>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => {
+                const p = Math.max(1, page - 1)
+                setPage(p)
+                updateUrl({ botId: selectedBotId, status: statusFilter || undefined, source: sourceFilter || undefined, page: p, pageSize })
+              }}
+              disabled={page <= 1}
+              className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-60 disabled:cursor-not-allowed text-sm font-medium transition-colors"
+            >
+              Назад
+            </button>
+            {(() => {
+              const pages: number[] = []
+              const start = Math.max(1, page - 2)
+              const end = Math.min(totalPages, page + 2)
+              if (start > 1) pages.push(1)
+              for (let p = start; p <= end; p++) pages.push(p)
+              if (end < totalPages) pages.push(totalPages)
+
+              const uniq = Array.from(new Set(pages))
+              const out: JSX.Element[] = []
+              let prev = 0
+              for (const p of uniq) {
+                if (prev && p - prev > 1) {
+                  out.push(<span key={`dots-${prev}`} className="px-2 text-gray-400">…</span>)
+                }
+                out.push(
+                  <button
+                    key={p}
+                    onClick={() => {
+                      setPage(p)
+                      updateUrl({ botId: selectedBotId, status: statusFilter || undefined, source: sourceFilter || undefined, page: p, pageSize })
+                    }}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      p === page
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {p}
+                  </button>
+                )
+                prev = p
+              }
+              return out
+            })()}
+            <button
+              onClick={() => {
+                const p = Math.min(totalPages, page + 1)
+                setPage(p)
+                updateUrl({ botId: selectedBotId, status: statusFilter || undefined, source: sourceFilter || undefined, page: p, pageSize })
+              }}
+              disabled={page >= totalPages}
+              className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-60 disabled:cursor-not-allowed text-sm font-medium transition-colors"
+            >
+              Вперёд
+            </button>
+          </div>
+        </div>
       </div>
     </DashboardLayout>
+  )
+}
+
+export default function UsersPage() {
+  return (
+    <Suspense
+      fallback={
+        <DashboardLayout>
+          <div className="flex items-center justify-center h-64">
+            <div className="text-lg">Загрузка...</div>
+          </div>
+        </DashboardLayout>
+      }
+    >
+      <UsersPageInner />
+    </Suspense>
   )
 }
 

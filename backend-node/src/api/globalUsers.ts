@@ -157,6 +157,9 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
     const sourceFilter = req.query.source_filter as string | undefined;
     const skip = parseInt((req.query.skip as string) || '0', 10);
     const limit = Math.min(parseInt((req.query.limit as string) || '100', 10), 1000);
+    const includeTotal =
+      req.query.include_total === '1' ||
+      req.query.include_total === 'true';
 
     // Получаем все боты пользователя
     const userBots = await prisma.bot.findMany({
@@ -166,34 +169,33 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
     const botIds = userBots.map((bot) => bot.id);
 
     if (botIds.length === 0) {
-      return res.json([]);
+      return res.json(includeTotal ? { items: [], total: 0, skip, limit, counts: { active: 0, blocked: 0, left: 0 } } : []);
     }
 
-    // Запрос пользователей
-    const where: any = {
+    // Базовый where для счётчиков (без statusFilter)
+    const whereBase: any = {
       botId: { in: botIds },
     };
 
     // Применяем фильтр по bot_id, если указан
     if (botId !== undefined) {
       if (!botIds.includes(botId)) {
-        return res.json([]); // Бот не принадлежит пользователю
+        return res.json(includeTotal ? { items: [], total: 0, skip, limit, counts: { active: 0, blocked: 0, left: 0 } } : []); // Бот не принадлежит пользователю
       }
-      where.botId = botId;
-    }
-
-    // Применяем фильтр по статусу
-    if (statusFilter) {
-      where.status = statusFilter;
+      whereBase.botId = botId;
     }
 
     // Применяем фильтр по источнику
     if (sourceFilter) {
-      where.source = sourceFilter;
+      whereBase.source = sourceFilter;
     }
 
-    const users = await prisma.telegramUser.findMany({
-      where,
+    // where для списка (с учетом statusFilter)
+    const whereList = statusFilter ? { ...whereBase, status: statusFilter } : whereBase;
+
+    const [users, total, grouped] = await Promise.all([
+      prisma.telegramUser.findMany({
+      where: whereList,
       include: {
         tags: {
           select: {
@@ -206,7 +208,25 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
       orderBy: { joinedAt: 'desc' },
       skip,
       take: limit,
-    });
+      }),
+      includeTotal ? prisma.telegramUser.count({ where: whereList }) : Promise.resolve(0),
+      includeTotal
+        ? prisma.telegramUser.groupBy({
+            by: ['status'],
+            where: whereBase,
+            _count: { _all: true },
+          })
+        : Promise.resolve([] as Array<{ status: string; _count: { _all: number } }>),
+    ]);
+
+    const counts = { active: 0, blocked: 0, left: 0 } as Record<string, number>;
+    if (includeTotal) {
+      for (const g of grouped as any[]) {
+        const key = String(g.status || '');
+        const c = (g._count?._all ?? 0) as number;
+        if (key in counts) counts[key] += c;
+      }
+    }
 
     // Добавляем информацию о боте к каждому пользователю
     const result = users.map((user) => {
@@ -231,7 +251,7 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
       };
     });
 
-    return res.json(result);
+    return res.json(includeTotal ? { items: result, total, skip, limit, counts } : result);
   } catch (error) {
     console.error('Error getting all users:', error);
     return res.status(500).json({ detail: 'Internal server error' });

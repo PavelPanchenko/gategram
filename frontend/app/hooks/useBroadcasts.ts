@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api, Broadcast, BroadcastFilters } from '@/app/lib/api'
 import { useRouter } from 'next/navigation'
 
@@ -16,6 +16,48 @@ export function useBroadcasts(botId?: number, status?: string) {
     },
     refetchOnWindowFocus: true, // Обновлять при возврате на вкладку
     staleTime: 1000, // Данные считаются устаревшими через 1 секунду
+  })
+}
+
+export function useBroadcastsInfinite(botId?: number, status?: string, pageSize: number = 50) {
+  return useInfiniteQuery({
+    queryKey: ['broadcasts', 'infinite', botId, status, pageSize],
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) => api.getBroadcasts(botId, status, pageParam, pageSize),
+    getNextPageParam: (lastPage, allPages) =>
+      lastPage.length < pageSize ? undefined : allPages.length * pageSize,
+    refetchInterval: (query) => {
+      const data = query.state.data as { pages: Broadcast[][] } | undefined
+      const flat = data?.pages?.flat() || []
+      const hasActiveOrScheduled = flat.some(
+        (b) => b.status === 'sending' || b.status === 'scheduled' || b.status === 'pending'
+      )
+      return hasActiveOrScheduled ? 2000 : false
+    },
+    refetchOnWindowFocus: true,
+    staleTime: 1000,
+  })
+}
+
+export function useBroadcastsPaged(
+  botId?: number,
+  status?: string,
+  page: number = 1,
+  pageSize: number = 50
+) {
+  return useQuery({
+    queryKey: ['broadcasts', 'paged', botId, status, page, pageSize],
+    queryFn: () => api.getBroadcastsPaged(botId, status, page, pageSize),
+    refetchInterval: (query) => {
+      const data = query.state.data as { items: Broadcast[] } | undefined
+      const broadcasts = data?.items
+      const hasActiveOrScheduled = broadcasts?.some(
+        (b) => b.status === 'sending' || b.status === 'scheduled' || b.status === 'pending'
+      )
+      return hasActiveOrScheduled ? 2000 : false
+    },
+    refetchOnWindowFocus: true,
+    staleTime: 1000,
   })
 }
 

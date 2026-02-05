@@ -1,20 +1,32 @@
 'use client'
 
-import { useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import DashboardLayout from '@/app/components/DashboardLayout'
 import { Broadcast } from '@/app/lib/api'
-import { useBroadcasts, useDeleteBroadcast, useCancelBroadcast } from '@/app/hooks/useBroadcasts'
+import { useBroadcastsPaged, useDeleteBroadcast, useCancelBroadcast } from '@/app/hooks/useBroadcasts'
 import { useBots } from '@/app/hooks/useBots'
 import { showToast } from '@/app/utils/toast'
 import ConfirmModal from '@/app/components/ConfirmModal'
 import Link from 'next/link'
 import { Trash2 } from 'lucide-react'
 
-export default function BroadcastsPage() {
+function BroadcastsPageInner() {
   const [selectedBotId, setSelectedBotId] = useState<number | undefined>(undefined)
   const [statusFilter, setStatusFilter] = useState<string>('')
+  const [page, setPage] = useState<number>(1)
+  const [pageSize, setPageSize] = useState<number>(50)
+  const router = useRouter()
+  const searchParams = useSearchParams()
   
-  const { data: broadcasts = [], isLoading: loading, error: queryError } = useBroadcasts(selectedBotId, statusFilter)
+  const {
+    data,
+    isLoading: loading,
+    error: queryError,
+  } = useBroadcastsPaged(selectedBotId, statusFilter || undefined, page, pageSize)
+  const broadcasts = data?.items || []
+  const total = data?.total ?? 0
+  const totalPages = Math.max(1, Math.ceil(total / pageSize))
   const { data: bots = [] } = useBots()
   const deleteBroadcast = useDeleteBroadcast()
   const cancelBroadcast = useCancelBroadcast()
@@ -40,6 +52,36 @@ export default function BroadcastsPage() {
   })
   
   const [deleteMessages, setDeleteMessages] = useState(false)
+
+  // Синхронизация фильтров/страницы из query параметров (ссылки)
+  useEffect(() => {
+    const botIdRaw = searchParams.get('bot_id')
+    const statusRaw = searchParams.get('status_filter') || ''
+    const pageRaw = searchParams.get('page') || '1'
+    const pageSizeRaw = searchParams.get('page_size') || '50'
+
+    const botIdParsed = botIdRaw ? parseInt(botIdRaw, 10) : undefined
+    const pageParsed = parseInt(pageRaw, 10)
+    const pageSizeParsed = parseInt(pageSizeRaw, 10)
+
+    setSelectedBotId(Number.isFinite(botIdParsed as any) && (botIdParsed as any) > 0 ? botIdParsed : undefined)
+    setStatusFilter(statusRaw)
+    setPage(Number.isFinite(pageParsed) && pageParsed > 0 ? pageParsed : 1)
+    setPageSize(Number.isFinite(pageSizeParsed) && pageSizeParsed > 0 ? pageSizeParsed : 50)
+  }, [searchParams])
+
+  const updateUrl = (next: { botId?: number; status?: string; page?: number; pageSize?: number }) => {
+    const p = new URLSearchParams(searchParams.toString())
+    if (next.botId) p.set('bot_id', String(next.botId))
+    else p.delete('bot_id')
+    if (next.status) p.set('status_filter', next.status)
+    else p.delete('status_filter')
+    const newPage = next.page && next.page > 0 ? next.page : 1
+    p.set('page', String(newPage))
+    const newPageSize = next.pageSize && next.pageSize > 0 ? next.pageSize : pageSize
+    p.set('page_size', String(newPageSize))
+    router.push(`/broadcasts?${p.toString()}`)
+  }
 
   const handleCancel = async (broadcastId: number) => {
     setConfirmModal({
@@ -186,7 +228,12 @@ export default function BroadcastsPage() {
           <label className="block text-sm font-medium text-gray-700 mb-1">Бот</label>
           <select
             value={selectedBotId || ''}
-            onChange={(e) => setSelectedBotId(e.target.value ? Number(e.target.value) : undefined)}
+            onChange={(e) => {
+              const botId = e.target.value ? Number(e.target.value) : undefined
+              setSelectedBotId(botId)
+              setPage(1)
+              updateUrl({ botId, status: statusFilter || undefined, page: 1, pageSize })
+            }}
             className="w-full px-3 py-2 border border-gray-300 rounded-md"
           >
             <option value="">Все боты</option>
@@ -201,7 +248,12 @@ export default function BroadcastsPage() {
           <label className="block text-sm font-medium text-gray-700 mb-1">Статус</label>
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => {
+              const v = e.target.value
+              setStatusFilter(v)
+              setPage(1)
+              updateUrl({ botId: selectedBotId, status: v || undefined, page: 1, pageSize })
+            }}
             className="w-full px-3 py-2 border border-gray-300 rounded-md"
           >
             <option value="">Все статусы</option>
@@ -211,6 +263,25 @@ export default function BroadcastsPage() {
             <option value="completed">Завершена</option>
             <option value="failed">Ошибка</option>
             <option value="cancelled">Отменена</option>
+          </select>
+        </div>
+        <div className="flex-1">
+          <label className="block text-sm font-medium text-gray-700 mb-1">На странице</label>
+          <select
+            value={pageSize}
+            onChange={(e) => {
+              const v = parseInt(e.target.value, 10)
+              const nextSize = Number.isFinite(v) && v > 0 ? v : 50
+              setPageSize(nextSize)
+              setPage(1)
+              updateUrl({ botId: selectedBotId, status: statusFilter || undefined, page: 1, pageSize: nextSize })
+            }}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+          >
+            <option value={25}>25</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+            <option value={200}>200</option>
           </select>
         </div>
       </div>
@@ -298,6 +369,74 @@ export default function BroadcastsPage() {
           </table>
         )}
       </div>
+
+      {/* Пагинация (ссылки) */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="text-sm text-gray-600">
+          Всего: <span className="font-medium">{total}</span> • Страница{' '}
+          <span className="font-medium">{page}</span> из{' '}
+          <span className="font-medium">{totalPages}</span>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => {
+              const p = Math.max(1, page - 1)
+              setPage(p)
+              updateUrl({ botId: selectedBotId, status: statusFilter || undefined, page: p, pageSize })
+            }}
+            disabled={page <= 1}
+            className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-60 disabled:cursor-not-allowed text-sm font-medium transition-colors"
+          >
+            Назад
+          </button>
+          {(() => {
+            const pages: number[] = []
+            const start = Math.max(1, page - 2)
+            const end = Math.min(totalPages, page + 2)
+            if (start > 1) pages.push(1)
+            for (let p = start; p <= end; p++) pages.push(p)
+            if (end < totalPages) pages.push(totalPages)
+
+            const uniq = Array.from(new Set(pages))
+            const out: JSX.Element[] = []
+            let prev = 0
+            for (const p of uniq) {
+              if (prev && p - prev > 1) {
+                out.push(<span key={`dots-${prev}`} className="px-2 text-gray-400">…</span>)
+              }
+              out.push(
+                <button
+                  key={p}
+                  onClick={() => {
+                    setPage(p)
+                    updateUrl({ botId: selectedBotId, status: statusFilter || undefined, page: p, pageSize })
+                  }}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    p === page
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  {p}
+                </button>
+              )
+              prev = p
+            }
+            return out
+          })()}
+          <button
+            onClick={() => {
+              const p = Math.min(totalPages, page + 1)
+              setPage(p)
+              updateUrl({ botId: selectedBotId, status: statusFilter || undefined, page: p, pageSize })
+            }}
+            disabled={page >= totalPages}
+            className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-60 disabled:cursor-not-allowed text-sm font-medium transition-colors"
+          >
+            Вперёд
+          </button>
+        </div>
+      </div>
       
       {/* Модальное окно подтверждения */}
       <ConfirmModal
@@ -329,6 +468,22 @@ export default function BroadcastsPage() {
       </ConfirmModal>
     </div>
     </DashboardLayout>
+  )
+}
+
+export default function BroadcastsPage() {
+  return (
+    <Suspense
+      fallback={
+        <DashboardLayout>
+          <div className="flex items-center justify-center h-64">
+            <div className="text-lg">Загрузка...</div>
+          </div>
+        </DashboardLayout>
+      }
+    >
+      <BroadcastsPageInner />
+    </Suspense>
   )
 }
 

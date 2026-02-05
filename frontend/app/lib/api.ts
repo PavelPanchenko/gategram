@@ -145,6 +145,14 @@ export interface Broadcast {
   created_at: string
 }
 
+export interface PagedResult<T> {
+  items: T[]
+  total: number
+  skip: number
+  limit: number
+  counts?: Record<string, number>
+}
+
 export interface AnalyticsOverview {
   total_bots: number
   total_users: number
@@ -578,12 +586,40 @@ class ApiClient {
   }
 
   // Broadcasts
-  async getBroadcasts(botId?: number, status?: string): Promise<Broadcast[]> {
+  async getBroadcasts(
+    botId?: number,
+    status?: string,
+    skip: number = 0,
+    limit: number = 50
+  ): Promise<Broadcast[]> {
     const params = new URLSearchParams()
     if (botId) params.append('bot_id', botId.toString())
     if (status) params.append('status_filter', status)
+    params.append('skip', skip.toString())
+    params.append('limit', limit.toString())
     const query = params.toString()
     return this.request<Broadcast[]>(`/broadcasts${query ? `?${query}` : ''}`)
+  }
+
+  async getBroadcastsPaged(
+    botId?: number,
+    status?: string,
+    page: number = 1,
+    pageSize: number = 50
+  ): Promise<PagedResult<Broadcast>> {
+    const safePage = Number.isFinite(page) && page > 0 ? page : 1
+    const safeSize = Number.isFinite(pageSize) && pageSize > 0 ? Math.min(pageSize, 1000) : 50
+    const skip = (safePage - 1) * safeSize
+    const limit = safeSize
+
+    const params = new URLSearchParams()
+    if (botId) params.append('bot_id', botId.toString())
+    if (status) params.append('status_filter', status)
+    params.append('skip', skip.toString())
+    params.append('limit', limit.toString())
+    params.append('include_total', '1')
+
+    return this.request<PagedResult<Broadcast>>(`/broadcasts?${params.toString()}`)
   }
 
   async getBroadcast(broadcastId: number): Promise<Broadcast> {
@@ -747,6 +783,29 @@ class ApiClient {
     params.append('skip', skip.toString())
     params.append('limit', limit.toString())
     return this.request<TelegramUser[]>(`/users?${params.toString()}`)
+  }
+
+  async getAllUsersPaged(
+    botId?: number,
+    statusFilter?: string,
+    sourceFilter?: string,
+    page: number = 1,
+    pageSize: number = 100
+  ): Promise<PagedResult<TelegramUser>> {
+    const safePage = Number.isFinite(page) && page > 0 ? page : 1
+    const safeSize = Number.isFinite(pageSize) && pageSize > 0 ? Math.min(pageSize, 1000) : 100
+    const skip = (safePage - 1) * safeSize
+    const limit = safeSize
+
+    const params = new URLSearchParams()
+    if (botId) params.append('bot_id', botId.toString())
+    if (statusFilter) params.append('status_filter', statusFilter)
+    if (sourceFilter) params.append('source_filter', sourceFilter)
+    params.append('skip', skip.toString())
+    params.append('limit', limit.toString())
+    params.append('include_total', '1')
+
+    return this.request<PagedResult<TelegramUser>>(`/users?${params.toString()}`)
   }
 
   async exportUsersCsv(

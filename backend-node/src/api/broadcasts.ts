@@ -117,6 +117,9 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
     const statusFilter = req.query.status_filter as string | undefined;
     const skip = parseInt((req.query.skip as string) || '0', 10);
     const limit = Math.min(parseInt((req.query.limit as string) || '100', 10), 1000);
+    const includeTotal =
+      req.query.include_total === '1' ||
+      req.query.include_total === 'true';
 
     const where: any = {
       ownerId: userId,
@@ -142,12 +145,15 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
       where.status = statusFilter;
     }
 
-    const broadcasts = await prisma.broadcast.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      skip,
-      take: limit,
-    });
+    const [broadcasts, total] = await Promise.all([
+      prisma.broadcast.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      includeTotal ? prisma.broadcast.count({ where }) : Promise.resolve(0),
+    ]);
 
     const result = broadcasts.map((broadcast) => ({
       id: broadcast.id,
@@ -164,7 +170,7 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
       created_at: broadcast.createdAt,
     }));
 
-    return res.json(result);
+    return res.json(includeTotal ? { items: result, total, skip, limit } : result);
   } catch (error) {
     console.error('Error getting broadcasts:', error);
     return res.status(500).json({ detail: 'Internal server error' });

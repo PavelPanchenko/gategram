@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api, TelegramUser } from '@/app/lib/api'
 
 export function useAllUsers(botId?: number, status?: string, source?: string) {
@@ -13,6 +13,46 @@ export function useAllUsers(botId?: number, status?: string, source?: string) {
     gcTime: 5 * 60 * 1000, // 5 минут в кеше
     retry: 1, // Только 1 повторная попытка
     retryDelay: 1000, // Задержка 1 секунда
+  })
+}
+
+export function useAllUsersPaged(
+  botId?: number,
+  status?: string,
+  source?: string,
+  page: number = 1,
+  pageSize: number = 100
+) {
+  return useQuery({
+    queryKey: ['users', 'all', 'paged', botId, status, source, page, pageSize],
+    queryFn: () => api.getAllUsersPaged(botId, status, source, page, pageSize),
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+    retry: 1,
+    retryDelay: 1000,
+  })
+}
+
+export function useAllUsersInfinite(
+  botId?: number,
+  status?: string,
+  source?: string,
+  pageSize: number = 100
+) {
+  return useInfiniteQuery({
+    queryKey: ['users', 'all', 'infinite', botId, status, source, pageSize],
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) => api.getAllUsers(botId, status, source, pageParam, pageSize),
+    getNextPageParam: (lastPage, allPages) =>
+      lastPage.length < pageSize ? undefined : allPages.length * pageSize,
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+    retry: 1,
+    retryDelay: 1000,
   })
 }
 
