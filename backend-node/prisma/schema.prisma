@@ -178,6 +178,7 @@ model Trigger {
 model ReferralLink {
   id        Int       @id @default(autoincrement())
   botId     Int       @map("bot_id")
+  code      String?   @db.VarChar(32)  // Короткий код для URL (лимит Telegram start = 64 символа)
   source    String    @db.VarChar
   createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime? @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -187,5 +188,7 @@ model ReferralLink {
   @@unique([botId, source])
   @@index([botId])
   @@index([source])
+  @@index([botId, code])
+  // code может быть null у старых записей — тогда в URL используется 'r'+id
   @@map("referral_links")
 }

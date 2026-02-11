@@ -118,27 +118,43 @@ export function setupBotHandlers(bot: Bot, botId: number): void {
       const lastName = ctx.from.last_name || null;
 
       // Извлекаем source из параметров команды /start
+      // В ссылке используется короткий code (лимит Telegram 64 символа); по нему находим полное название источника
       let source: string | null = null;
       if (ctx.message?.text) {
         const parts = ctx.message.text.split(' ');
         if (parts.length > 1) {
-          // Берем первый параметр после /start
-          // Декодируем URL-кодирование, если есть
+          let payload: string;
           try {
-            source = decodeURIComponent(parts[1]);
+            payload = decodeURIComponent(parts[1]);
           } catch {
-            source = parts[1];
+            payload = parts[1];
           }
-          // Обрабатываем случаи, когда Telegram веб-версия добавляет свои параметры
-          // Формат может быть: "tgchat_webkiev" (только системный) или "tgchat_webkiev_tg" (системный + пользовательский)
-          if (source.includes('_')) {
-            const sourceParts = source.split('_');
+          // Сначала пробуем найти реферальную ссылку по коду (короткий code в URL)
+          const byCode = await prisma.referralLink.findFirst({
+            where: { botId, code: payload },
+            select: { source: true },
+          });
+          if (byCode) {
+            source = byCode.source;
+          } else {
+            // Старый формат: start=r123 → id реферальной ссылки 123
+            const rIdMatch = /^r(\d+)$/.exec(payload);
+            if (rIdMatch) {
+              const refLink = await prisma.referralLink.findFirst({
+                where: { botId, id: parseInt(rIdMatch[1], 10) },
+                select: { source: true },
+              });
+              if (refLink) source = refLink.source;
+            }
+          }
+          // Если не нашли по коду — считаем payload сырым источником (обратная совместимость)
+          if (source === null && payload) {
+            source = payload;
             const webPrefixes = ['tgchat', 'web', 'webkiev', 'android', 'ios'];
-            if (webPrefixes.includes(sourceParts[0])) {
-              if (sourceParts.length > 2) {
-                source = sourceParts.slice(2).join('_');
-              } else {
-                source = null;
+            if (source.includes('_')) {
+              const sourceParts = source.split('_');
+              if (webPrefixes.includes(sourceParts[0])) {
+                source = sourceParts.length > 2 ? sourceParts.slice(2).join('_') : null;
               }
             }
           }

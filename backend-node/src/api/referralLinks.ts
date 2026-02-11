@@ -1,7 +1,9 @@
 /**
- * API эндпоинты для управления реферальными ссылками
+ * API эндпоинты для управления реферальными ссылками.
+ * В URL используется короткий code (≤64 символа, [A-Za-z0-9_-]), т.к. Telegram обрезает start-параметр.
  */
 
+import crypto from 'crypto';
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
@@ -9,6 +11,15 @@ import prisma from '../core/database';
 import { authenticateToken } from '../middleware/auth';
 
 const router = Router();
+
+/** Генерирует короткий код для start-параметра (Telegram: до 64 символов, только A-Za-z0-9_-) */
+function generateShortCode(): string {
+  return crypto.randomBytes(8).toString('base64url');
+}
+
+function linkUrl(botUsername: string, codeOrPayload: string): string {
+  return `https://t.me/${botUsername}?start=${encodeURIComponent(codeOrPayload)}`;
+}
 
 let warnedMissingReferralLinksTable = false;
 function isMissingReferralLinksTableError(error: unknown): boolean {
@@ -52,7 +63,7 @@ router.get('/:botId/referral-links', authenticateToken, async (req: Request, res
     }
 
     // Получаем реферальные ссылки
-    let referralLinks: Array<{ id: number; source: string; createdAt: Date; updatedAt: Date | null }> = [];
+    let referralLinks: Array<{ id: number; code: string | null; source: string; createdAt: Date; updatedAt: Date | null }> = [];
     try {
       referralLinks = await prisma.referralLink.findMany({
         where: { botId },
@@ -71,11 +82,23 @@ router.get('/:botId/referral-links', authenticateToken, async (req: Request, res
       throw error;
     }
 
-    // Генерируем полные ссылки
+    // Проставляем короткий code старым ссылкам (у которых code ещё null)
+    for (const link of referralLinks) {
+      if (link.code != null) continue;
+      let code = generateShortCode();
+      for (let i = 0; i < 5; i++) {
+        const taken = await prisma.referralLink.findFirst({ where: { botId, code } });
+        if (!taken) break;
+        code = generateShortCode();
+      }
+      await prisma.referralLink.update({ where: { id: link.id }, data: { code } });
+      link.code = code;
+    }
+
+    // В URL только короткий code (лимит Telegram по start = 64 символа)
     const linksWithUrls = referralLinks.map((link) => {
-      const url = bot.username
-        ? `https://t.me/${bot.username}?start=${encodeURIComponent(link.source)}`
-        : null;
+      const payload = link.code ?? `r${link.id}`;
+      const url = bot.username ? linkUrl(bot.username, payload) : null;
       return {
         id: link.id,
         source: link.source,
@@ -145,12 +168,20 @@ router.post('/:botId/referral-links', authenticateToken, async (req: Request, re
       return res.status(409).json({ detail: 'Referral link with this source already exists' });
     }
 
-    // Создаем реферальную ссылку
+    // Уникальный короткий код для URL (лимит Telegram 64 символа)
+    let code = generateShortCode();
+    for (let i = 0; i < 5; i++) {
+      const taken = await prisma.referralLink.findFirst({ where: { botId, code } });
+      if (!taken) break;
+      code = generateShortCode();
+    }
+
     let referralLink: any;
     try {
       referralLink = await prisma.referralLink.create({
         data: {
           botId,
+          code,
           source: body.source.trim(),
         },
       });
@@ -164,7 +195,7 @@ router.post('/:botId/referral-links', authenticateToken, async (req: Request, re
       throw error;
     }
 
-    const url = `https://t.me/${bot.username}?start=${encodeURIComponent(referralLink.source)}`;
+    const url = linkUrl(bot.username!, referralLink.code ?? `r${referralLink.id}`);
 
     return res.status(201).json({
       id: referralLink.id,
@@ -272,9 +303,8 @@ router.put('/:botId/referral-links/:linkId', authenticateToken, async (req: Requ
       throw error;
     }
 
-    const url = bot.username
-      ? `https://t.me/${bot.username}?start=${encodeURIComponent(updatedLink.source)}`
-      : null;
+    const payload = updatedLink.code ?? `r${updatedLink.id}`;
+    const url = bot.username ? linkUrl(bot.username, payload) : null;
 
     return res.json({
       id: updatedLink.id,
