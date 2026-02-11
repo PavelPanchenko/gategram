@@ -32,7 +32,8 @@ services:
   redis:
     image: redis:7-alpine
     container_name: gategram_redis
-    command: redis-server --loglevel warning
+    # tcp-backlog 128 чтобы не было WARNING (somaxconn на хосте часто 128)
+    command: redis-server --loglevel warning --tcp-backlog 128
     ports:
       - "6379:6379"
     volumes:

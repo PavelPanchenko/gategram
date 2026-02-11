@@ -26,13 +26,25 @@ class BotManager {
     try {
       console.log(`Starting bot ${botId} with token ${token.slice(0, 10)}...`);
 
-      // Создаем экземпляр бота
       const bot = new Bot(token);
 
-      // Настраиваем обработчики
+      // Проверяем токен до запуска polling (401 = неверный/отозванный токен)
+      try {
+        await bot.api.getMe();
+      } catch (err: unknown) {
+        const isUnauthorized =
+          err instanceof GrammyError && err.error_code === 401 ||
+          (err as { error_code?: number })?.error_code === 401;
+        if (isUnauthorized) {
+          console.error(`Bot ${botId}: invalid or revoked token (401 Unauthorized). Update the token in BotFather and in the bot settings.`);
+        } else {
+          console.error(`Bot ${botId}: getMe failed:`, err);
+        }
+        return false;
+      }
+
       setupBotHandlers(bot, botId);
 
-      // Обработка ошибок
       bot.catch((err) => {
         const ctx = err.ctx;
         console.error(`Error while handling update ${ctx.update.update_id}:`);
@@ -46,12 +58,10 @@ class BotManager {
         }
       });
 
-      // Запускаем polling
       const stopPolling = () => {
         bot.stop();
       };
 
-      // Запускаем polling в фоне
       bot.start({
         allowed_updates: ['message', 'callback_query', 'chat_member', 'my_chat_member'],
       }).catch((error) => {
@@ -59,7 +69,6 @@ class BotManager {
         this.bots.delete(botId);
       });
 
-      // Сохраняем экземпляр
       this.bots.set(botId, {
         bot,
         isRunning: true,
