@@ -46,9 +46,11 @@ class BotManager {
       setupBotHandlers(bot, botId);
 
       bot.catch((err) => {
+        const e = err.error as { error_code?: number; description?: string };
+        if (e?.error_code === 403 && String(e.description || '').includes('blocked by the user')) return;
+        if (e?.error_code === 400 && String(e.description || '').toLowerCase().includes('query is too old')) return;
         const ctx = err.ctx;
         console.error(`Error while handling update ${ctx.update.update_id}:`);
-        const e = err.error;
         if (e instanceof GrammyError) {
           console.error('Error in request:', e.description);
         } else if (e instanceof HttpError) {

@@ -10,11 +10,17 @@ import { botManager } from './botManager';
 
 /** 403 от Telegram, когда пользователь заблокировал бота — не логируем стек, только помечаем в БД */
 function isBlockedByUserError(err: unknown): boolean {
-  return (
-    err instanceof GrammyError &&
-    err.error_code === 403 &&
-    (err.description?.includes('blocked by the user') ?? false)
-  );
+  if (err instanceof GrammyError) {
+    return err.error_code === 403 && (err.description?.includes('blocked by the user') ?? false);
+  }
+  const e = err as { error_code?: number; description?: string } | null;
+  return !!(e && e.error_code === 403 && String(e.description || '').includes('blocked by the user'));
+}
+
+/** 400 от Telegram: callback query истёк — не логируем как ошибку */
+function isCallbackQueryExpiredError(err: unknown): boolean {
+  const e = err as { error_code?: number; description?: string } | null;
+  return !!(e && e.error_code === 400 && String(e.description || '').toLowerCase().includes('query is too old'));
 }
 
 async function markUserBlockedIfNeeded(
@@ -366,8 +372,13 @@ export function setupBotHandlers(bot: Bot, botId: number): void {
       }
     } catch (error) {
       if (await markUserBlockedIfNeeded(error, botId, ctx.from?.id)) return;
+      if (isCallbackQueryExpiredError(error)) return;
       console.error(`Error in process_continue for bot ${botId}:`, error);
-      await ctx.answerCallbackQuery({ text: 'Произошла ошибка', show_alert: true });
+      try {
+        await ctx.answerCallbackQuery({ text: 'Произошла ошибка', show_alert: true });
+      } catch {
+        // callback уже истёк или другая ошибка — игнорируем
+      }
     }
   });
 
