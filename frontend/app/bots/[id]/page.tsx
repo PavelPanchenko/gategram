@@ -10,6 +10,7 @@ import { useBot, useUpdateBot } from '@/app/hooks/useBots'
 import { useChannelInfo } from '@/app/hooks/useChannelInfo'
 import { useTemplates } from '@/app/hooks/useTemplates'
 import { useBotUsers } from '@/app/hooks/useUsers'
+import { useBotStats } from '@/app/hooks/useAnalytics'
 import {
   useReferralLinks,
   useCreateReferralLink,
@@ -140,6 +141,7 @@ export default function EditBotPage() {
   const { data: bot, isLoading: loadingBot, error: loadError } = useBot(botId)
   const { data: templates } = useTemplates(botId)
   const { data: users } = useBotUsers(botId)
+  const { data: botStats } = useBotStats(botId)
   const updateBot = useUpdateBot()
   const { data: referralLinks = [], isLoading: loadingLinks } = useReferralLinks(botId)
   const createReferralLink = useCreateReferralLink()
@@ -352,14 +354,9 @@ export default function EditBotPage() {
     )
   }
 
-  // Вычисляем статистику по источникам
-  const sourceStats = users?.reduce((acc, user) => {
-    const source = user.source || 'Без источника'
-    acc[source] = (acc[source] || 0) + 1
-    return acc
-  }, {} as Record<string, number>) || {}
-
-  const sortedSources = Object.entries(sourceStats)
+  // Статистика по источникам — из API аналитики (по всем пользователям), а не по первым 100
+  const usersBySource = botStats?.users_by_source ?? {}
+  const sortedSources = Object.entries(usersBySource)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 10) // Топ 10 источников
 
@@ -484,14 +481,14 @@ export default function EditBotPage() {
                   >
                     <div className="flex items-center gap-2">
                       <Users size={18} className="text-indigo-600" />
-                      <span className="font-medium text-gray-900">{source}</span>
+                      <span className="font-medium text-gray-900">{source === 'unknown' ? 'Без источника' : source}</span>
                     </div>
                     <span className="text-lg font-bold text-indigo-600">{count}</span>
                   </div>
                 ))}
               </div>
               <div className="mt-4 text-sm text-gray-500 text-center">
-                Всего пользователей: <span className="font-semibold text-gray-700">{users?.length || 0}</span>
+                Всего пользователей: <span className="font-semibold text-gray-700">{botStats?.total_users ?? 0}</span>
               </div>
             </div>
           )}
