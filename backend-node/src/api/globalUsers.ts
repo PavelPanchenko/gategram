@@ -169,7 +169,7 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
     const botIds = userBots.map((bot) => bot.id);
 
     if (botIds.length === 0) {
-      return res.json(includeTotal ? { items: [], total: 0, skip, limit, counts: { active: 0, blocked: 0, left: 0 } } : []);
+      return res.json(includeTotal ? { items: [], total: 0, skip, limit, counts: { active: 0, blocked: 0, left: 0 }, sources: [] } : []);
     }
 
     // Базовый where для счётчиков (без statusFilter)
@@ -180,7 +180,7 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
     // Применяем фильтр по bot_id, если указан
     if (botId !== undefined) {
       if (!botIds.includes(botId)) {
-        return res.json(includeTotal ? { items: [], total: 0, skip, limit, counts: { active: 0, blocked: 0, left: 0 } } : []); // Бот не принадлежит пользователю
+        return res.json(includeTotal ? { items: [], total: 0, skip, limit, counts: { active: 0, blocked: 0, left: 0 }, sources: [] } : []);
       }
       whereBase.botId = botId;
     }
@@ -193,7 +193,11 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
     // where для списка (с учетом statusFilter)
     const whereList = statusFilter ? { ...whereBase, status: statusFilter } : whereBase;
 
-    const [users, total, grouped] = await Promise.all([
+    // Для списка уникальных источников в фильтре — только bot_id и status, без source_filter
+    const whereForSources: any = { botId: whereBase.botId };
+    if (statusFilter) whereForSources.status = statusFilter;
+
+    const [users, total, grouped, sourceRows] = await Promise.all([
       prisma.telegramUser.findMany({
       where: whereList,
       include: {
@@ -217,6 +221,13 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
             _count: { _all: true },
           })
         : Promise.resolve([] as Array<{ status: string; _count: { _all: number } }>),
+      includeTotal
+        ? prisma.telegramUser.findMany({
+            where: whereForSources,
+            select: { source: true },
+            distinct: ['source'],
+          })
+        : Promise.resolve([] as Array<{ source: string | null }>),
     ]);
 
     const counts = { active: 0, blocked: 0, left: 0 } as Record<string, number>;
@@ -227,6 +238,12 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
         if (key in counts) counts[key] += c;
       }
     }
+
+    const sources: string[] = includeTotal
+      ? (sourceRows as Array<{ source: string | null }>)
+          .map((r) => r.source)
+          .filter((s): s is string => s != null && s !== '')
+      : [];
 
     // Добавляем информацию о боте к каждому пользователю
     const result = users.map((user) => {
@@ -251,7 +268,7 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
       };
     });
 
-    return res.json(includeTotal ? { items: result, total, skip, limit, counts } : result);
+    return res.json(includeTotal ? { items: result, total, skip, limit, counts, sources } : result);
   } catch (error) {
     console.error('Error getting all users:', error);
     return res.status(500).json({ detail: 'Internal server error' });

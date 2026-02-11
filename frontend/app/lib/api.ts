@@ -151,6 +151,8 @@ export interface PagedResult<T> {
   skip: number
   limit: number
   counts?: Record<string, number>
+  /** Уникальные значения для фильтра «Источник» (все источники по текущим bot_id/status) */
+  sources?: string[]
 }
 
 export interface AnalyticsOverview {

@@ -382,8 +382,8 @@ function UsersPageInner() {
 
   const error = queryError ? (queryError as Error).message : ''
 
-  // Собираем уникальные источники
-  const sources = Array.from(new Set(users.map((u) => u.source).filter(Boolean))) as string[]
+  // Уникальные источники для фильтра — с бэкенда (все по выбранному боту/статусу), иначе с текущей страницы
+  const sources = data?.sources ?? (Array.from(new Set(users.map((u) => u.source).filter(Boolean))) as string[])
 
   const handleExport = async () => {
     try {
