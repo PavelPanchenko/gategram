@@ -2,11 +2,33 @@
  * Обработчики для Telegram ботов
  */
 
-import { Bot, Context, InlineKeyboard } from 'grammy';
+import { Bot, Context, GrammyError, InlineKeyboard } from 'grammy';
 import prisma from '../core/database';
 import { processTriggerEvent, TriggerEvent } from '../utils/triggerProcessor';
 import { processTemplate } from '../utils/templateProcessor';
 import { botManager } from './botManager';
+
+/** 403 от Telegram, когда пользователь заблокировал бота — не логируем стек, только помечаем в БД */
+function isBlockedByUserError(err: unknown): boolean {
+  return (
+    err instanceof GrammyError &&
+    err.error_code === 403 &&
+    (err.description?.includes('blocked by the user') ?? false)
+  );
+}
+
+async function markUserBlockedIfNeeded(
+  err: unknown,
+  botId: number,
+  userId: number | undefined
+): Promise<boolean> {
+  if (!isBlockedByUserError(err) || userId == null) return false;
+  await prisma.telegramUser.updateMany({
+    where: { botId, telegramUserId: BigInt(userId) },
+    data: { status: 'blocked', lastActivity: new Date() },
+  });
+  return true;
+}
 
 type UiLocale = 'ru' | 'en';
 function getUiLocale(ctx: Context): UiLocale {
@@ -268,11 +290,14 @@ export function setupBotHandlers(bot: Bot, botId: number): void {
         await ctx.reply(welcomeText);
       }
     } catch (error) {
+      if (await markUserBlockedIfNeeded(error, botId, ctx.from?.id)) return;
       console.error(`Error in cmd_start for bot ${botId}:`, error);
       try {
         await ctx.reply('Произошла ошибка. Попробуйте позже.');
       } catch (sendError) {
-        console.error(`Failed to send error message to user ${ctx.from?.id}:`, sendError);
+        if (!isBlockedByUserError(sendError)) {
+          console.error(`Failed to send error message to user ${ctx.from?.id}:`, sendError);
+        }
       }
     }
   });
@@ -340,6 +365,7 @@ export function setupBotHandlers(bot: Bot, botId: number): void {
         await ctx.reply(t.thanks);
       }
     } catch (error) {
+      if (await markUserBlockedIfNeeded(error, botId, ctx.from?.id)) return;
       console.error(`Error in process_continue for bot ${botId}:`, error);
       await ctx.answerCallbackQuery({ text: 'Произошла ошибка', show_alert: true });
     }
@@ -378,6 +404,7 @@ export function setupBotHandlers(bot: Bot, botId: number): void {
       const t = getBotUiText((botData as any).settings, getUiLocale(ctx));
       await ctx.reply(t.chooseChannel, { reply_markup: keyboard });
     } catch (error) {
+      if (await markUserBlockedIfNeeded(error, botId, ctx.from?.id)) return;
       console.error(`Error in cmd_channels for bot ${botId}:`, error);
     }
   });
@@ -488,6 +515,7 @@ export function setupBotHandlers(bot: Bot, botId: number): void {
         await ctx.reply(welcomeText);
       }
     } catch (error) {
+      if (await markUserBlockedIfNeeded(error, botId, ctx.from?.id)) return;
       console.error(`Error in handle_message for bot ${botId}:`, error);
     }
   });
