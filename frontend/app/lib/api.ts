@@ -258,6 +258,33 @@ export interface BotComparison {
   users_this_month: number
 }
 
+export interface NotificationSettings {
+  error_notifications_enabled: boolean
+  notify_bot_id: number | null
+  notify_telegram_user_id: number | null
+  notify_bot: {
+    id: number
+    username: string | null
+    name: string | null
+  } | null
+  notify_telegram_user: {
+    id: number
+    telegram_user_id: string
+    username: string | null
+    first_name: string | null
+    last_name: string | null
+  } | null
+}
+
+export interface NotificationRecipient {
+  id: number
+  telegram_user_id: string
+  username: string | null
+  first_name: string | null
+  last_name: string | null
+  last_activity: string
+}
+
 class ApiClient {
   private baseUrl: string
 
@@ -1049,6 +1076,34 @@ class ApiClient {
 
   async compareBots(): Promise<BotComparison[]> {
     return this.request<BotComparison[]>('/analytics/bots/comparison')
+  }
+
+  // Notification settings
+  async getNotificationSettings(): Promise<NotificationSettings> {
+    return this.request<NotificationSettings>('/settings/notifications')
+  }
+
+  async updateNotificationSettings(data: {
+    error_notifications_enabled: boolean
+    notify_bot_id: number | null
+    notify_telegram_user_id: number | null
+  }): Promise<NotificationSettings> {
+    return this.request<NotificationSettings>('/settings/notifications', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async getNotificationRecipients(botId: number): Promise<NotificationRecipient[]> {
+    return this.request<NotificationRecipient[]>(
+      `/settings/notifications/recipients?bot_id=${botId}`
+    )
+  }
+
+  async testNotificationSettings(): Promise<{ message: string }> {
+    return this.request<{ message: string }>('/settings/notifications/test', {
+      method: 'POST',
+    })
   }
 
   // Удобные методы для HTTP запросов

@@ -157,3 +157,39 @@ export async function getChannelInfo(
   }
   return null;
 }
+
+/**
+ * Отправляет текстовое сообщение через Telegram Bot API (без grammy).
+ * Работает и в API-процессе, и в worker.
+ */
+export async function sendTelegramMessage(
+  token: string,
+  chatId: number | string,
+  text: string
+): Promise<{ ok: boolean; description?: string }> {
+  try {
+    const response = await fetch(
+      `${config.telegramApiUrl}/bot${token}/sendMessage`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text,
+          disable_web_page_preview: true,
+        }),
+        signal: AbortSignal.timeout(15000),
+      }
+    );
+
+    const data = (await response.json()) as TelegramApiResponse<unknown>;
+    if (!data.ok) {
+      return { ok: false, description: data.description || 'Telegram API error' };
+    }
+    return { ok: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('Error sending Telegram message:', message);
+    return { ok: false, description: message };
+  }
+}

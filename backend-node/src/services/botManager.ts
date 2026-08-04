@@ -4,6 +4,7 @@
 
 import { Bot, Context, GrammyError, HttpError } from 'grammy';
 import { setupBotHandlers } from './botHandlers';
+import { notifyBotOwnerError } from './errorNotifier';
 
 type BotInstance = {
   bot: Bot;
@@ -58,6 +59,7 @@ class BotManager {
         } else {
           console.error('Unknown error:', e);
         }
+        void notifyBotOwnerError(botId, `bot ${botId} update`, err.error);
       });
 
       const stopPolling = () => {
@@ -69,6 +71,7 @@ class BotManager {
       }).catch((error) => {
         console.error(`Error starting polling for bot ${botId}:`, error);
         this.bots.delete(botId);
+        void notifyBotOwnerError(botId, `bot ${botId} polling`, error);
       });
 
       this.bots.set(botId, {

@@ -33,9 +33,10 @@ services:
     image: redis:7-alpine
     container_name: gategram_redis
     # tcp-backlog 128 чтобы не было WARNING (somaxconn на хосте часто 128)
+    # Только localhost — снаружи к Redis не подключаться (иначе сканеры угоняют через REPLICAOF)
     command: redis-server --loglevel warning --tcp-backlog 128
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:

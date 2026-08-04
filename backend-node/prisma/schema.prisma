@@ -24,9 +24,28 @@ model User {
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt      DateTime? @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  bots Bot[]
+  bots                  Bot[]
+  notificationSettings  UserNotificationSettings?
 
   @@map("users")
+}
+
+model UserNotificationSettings {
+  id                        Int       @id @default(autoincrement())
+  userId                    Int       @unique @map("user_id")
+  errorNotificationsEnabled Boolean   @default(false) @map("error_notifications_enabled")
+  notifyBotId               Int?      @map("notify_bot_id")
+  notifyTelegramUserId      Int?      @map("notify_telegram_user_id")
+  createdAt                 DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                 DateTime? @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user               User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notifyBot          Bot?          @relation(fields: [notifyBotId], references: [id], onDelete: SetNull)
+  notifyTelegramUser TelegramUser? @relation(fields: [notifyTelegramUserId], references: [id], onDelete: SetNull)
+
+  @@index([notifyBotId])
+  @@index([notifyTelegramUserId])
+  @@map("user_notification_settings")
 }
 
 model Bot {
@@ -46,13 +65,14 @@ model Bot {
   createdAt               DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt               DateTime? @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  owner           User             @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  telegramUsers   TelegramUser[]
-  broadcasts      Broadcast[]
-  messageTemplates MessageTemplate[]
-  userTags        UserTag[]
-  triggers        Trigger[]
-  referralLinks   ReferralLink[]
+  owner                   User                        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  telegramUsers           TelegramUser[]
+  broadcasts              Broadcast[]
+  messageTemplates        MessageTemplate[]
+  userTags                UserTag[]
+  triggers                Trigger[]
+  referralLinks           ReferralLink[]
+  notificationSettingsAsBot UserNotificationSettings[]
 
   @@map("bots")
 }
@@ -69,8 +89,9 @@ model TelegramUser {
   joinedAt        DateTime  @default(now()) @map("joined_at") @db.Timestamptz(6)
   lastActivity    DateTime  @default(now()) @updatedAt @map("last_activity") @db.Timestamptz(6)
 
-  bot   Bot       @relation(fields: [botId], references: [id], onDelete: Cascade)
-  tags  UserTag[] @relation("UserTagsAssociation")
+  bot                      Bot                         @relation(fields: [botId], references: [id], onDelete: Cascade)
+  tags                     UserTag[]                   @relation("UserTagsAssociation")
+  notificationSettingsAsRecipient UserNotificationSettings[]
 
   @@index([botId])
   @@index([telegramUserId])

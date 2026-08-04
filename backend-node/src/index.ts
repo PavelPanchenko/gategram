@@ -19,6 +19,8 @@ import globalTriggersRouter from './api/globalTriggers';
 import globalUsersRouter from './api/globalUsers';
 import globalTemplatesRouter from './api/globalTemplates';
 import referralLinksRouter from './api/referralLinks';
+import settingsRouter from './api/settings';
+import { notifyOwnerError } from './services/errorNotifier';
 
 const app = express();
 
@@ -75,6 +77,7 @@ app.use('/api/tags', globalTagsRouter);
 app.use('/api/triggers', globalTriggersRouter);
 app.use('/api/users', globalUsersRouter);
 app.use('/api/templates', globalTemplatesRouter);
+app.use('/api/settings', settingsRouter);
 
 // Error handler (должен быть последним)
 app.use(errorHandler);
@@ -162,4 +165,11 @@ process.on('SIGINT', async () => {
   console.log('=== LIFESPAN SHUTDOWN ===');
   await botManager.stopAll();
   process.exit(0);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled rejection:', reason);
+  const message = reason instanceof Error ? reason.message : String(reason);
+  const stack = reason instanceof Error ? reason.stack : undefined;
+  void notifyOwnerError({ source: 'api unhandledRejection', message, stack });
 });

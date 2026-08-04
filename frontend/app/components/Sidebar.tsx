@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useAuth } from '@/app/hooks/useAuth'
-import { LayoutDashboard, Bot, Send, LogOut, FileText, Tag, Zap, Users, Menu, X } from 'lucide-react'
+import { LayoutDashboard, Bot, Send, LogOut, FileText, Tag, Zap, Users, Menu, X, Settings } from 'lucide-react'
 
 export default function Sidebar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
@@ -27,6 +27,7 @@ export default function Sidebar() {
     { href: '/templates', label: 'Шаблоны', icon: FileText },
     { href: '/tags', label: 'Теги', icon: Tag },
     { href: '/triggers', label: 'Триггеры', icon: Zap },
+    { href: '/settings', label: 'Настройки', icon: Settings },
   ]
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false)

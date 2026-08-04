@@ -11,6 +11,7 @@ import { connection, broadcastQueue } from '../queues/broadcastQueue';
 import path from 'path';
 import fs from 'fs';
 import { InputFile } from 'grammy';
+import { notifyOwnerError } from '../services/errorNotifier';
 
 // Получаем путь к медиа-директории
 const getMediaDir = () => {
@@ -74,7 +75,14 @@ export const broadcastWorker = new Worker(
         where: { id: broadcastId },
         data: { status: 'failed' },
       });
-      throw new Error(`Bot ${broadcast.botId} not found`);
+      const err = new Error(`Bot ${broadcast.botId} not found`);
+      void notifyOwnerError({
+        userId: broadcast.ownerId,
+        botId: broadcast.botId,
+        source: `broadcast ${broadcastId}`,
+        message: err.message,
+      });
+      throw err;
     }
 
     // Получаем список пользователей с применением фильтров
@@ -107,7 +115,14 @@ export const broadcastWorker = new Worker(
         where: { id: broadcastId },
         data: { status: 'failed' },
       });
-      throw new Error(`Bot ${broadcast.botId} is not running`);
+      const err = new Error(`Bot ${broadcast.botId} is not running`);
+      void notifyOwnerError({
+        userId: broadcast.ownerId,
+        botId: broadcast.botId,
+        source: `broadcast ${broadcastId}`,
+        message: err.message,
+      });
+      throw err;
     }
 
     // Отправляем сообщения батчами
@@ -451,6 +466,13 @@ export const scheduledBroadcastWorker = new Worker(
         await prisma.broadcast.update({
           where: { id: broadcast.id },
           data: { status: 'failed' },
+        });
+        void notifyOwnerError({
+          userId: broadcast.ownerId,
+          botId: broadcast.botId,
+          source: `scheduled broadcast ${broadcast.id}`,
+          message: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
         });
       }
     }
