@@ -15,11 +15,14 @@ RUN npm ci || npm install
 # Генерируем Prisma Client
 RUN npx prisma generate
 
-# Копируем исходный код
+# Копируем исходный код и собираем
 COPY . .
+RUN npm run build
 
-# Открываем порт
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 EXPOSE 8001
 
-# В dev режиме используем tsx watch, в production - собираем и запускаем
-CMD ["npm", "run", "dev"]
+ENTRYPOINT ["docker-entrypoint.sh"]
+CMD ["npm", "start"]

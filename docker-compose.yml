@@ -80,11 +80,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: >
-      sh -c "npm run build
-      && export DATABASE_URL=\"$(node -e 'const u=new URL(process.env.DATABASE_URL); if(process.env.DATABASE_URL_HOST) u.hostname=process.env.DATABASE_URL_HOST; if(process.env.DATABASE_URL_PORT) u.port=process.env.DATABASE_URL_PORT; console.log(u.toString());')\"
-      && if [ \"${INIT_DB:-0}\" = \"1\" ]; then npx prisma db push --accept-data-loss; fi
-      && npm start"
 
   backend-worker:
     build:
@@ -105,10 +100,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: >
-      sh -c "npm run build
-      && export DATABASE_URL=\"$(node -e 'const u=new URL(process.env.DATABASE_URL); if(process.env.DATABASE_URL_HOST) u.hostname=process.env.DATABASE_URL_HOST; if(process.env.DATABASE_URL_PORT) u.port=process.env.DATABASE_URL_PORT; console.log(u.toString());')\"
-      && node dist/worker.js"
+    command: ["npm", "run", "start:worker"]
+
 
   frontend:
     build:
