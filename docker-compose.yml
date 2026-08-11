@@ -69,6 +69,8 @@ services:
       # В контейнере имя хоста Postgres = "postgres" (вместо localhost из .env)
       - DATABASE_URL_HOST=postgres
       - DATABASE_URL_PORT=5432
+      - FRONTEND_HEALTH_URL=http://frontend:3000/api/health
+      - API_HEALTH_URL=http://127.0.0.1:8001/api/health
     volumes:
       - backend_media:/app/media
     ports:

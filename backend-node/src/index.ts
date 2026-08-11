@@ -21,6 +21,7 @@ import globalTemplatesRouter from './api/globalTemplates';
 import referralLinksRouter from './api/referralLinks';
 import settingsRouter from './api/settings';
 import { notifyOwnerError } from './services/errorNotifier';
+import { startHealthWatcher, stopHealthWatcher } from './services/healthWatcher';
 
 const app = express();
 
@@ -152,17 +153,21 @@ app.listen(PORT, '0.0.0.0', async () => {
   } catch (error) {
     console.error(`Error starting bots: ${error}`);
   }
+
+  startHealthWatcher();
 });
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {
   console.log('=== LIFESPAN SHUTDOWN ===');
+  stopHealthWatcher();
   await botManager.stopAll();
   process.exit(0);
 });
 
 process.on('SIGINT', async () => {
   console.log('=== LIFESPAN SHUTDOWN ===');
+  stopHealthWatcher();
   await botManager.stopAll();
   process.exit(0);
 });

@@ -1,6 +1,7 @@
 /**
  * Уведомления владельца аккаунта об ошибках в Telegram.
  * Настройки: UserNotificationSettings (бот + получатель из TelegramUser).
+ * Без userId/botId — рассылка всем, у кого включены уведомления об ошибках.
  */
 
 import prisma from '../core/database';
@@ -15,6 +16,8 @@ export type ErrorNotifyPayload = {
   stack?: string;
   userId?: number;
   botId?: number;
+  /** По умолчанию error (⚠️). info — для восстановления сервисов. */
+  level?: 'error' | 'info';
   meta?: Record<string, string | number | boolean | undefined | null>;
 };
 
@@ -38,7 +41,6 @@ function shouldSkip(userId: number, source: string, message: string): boolean {
   }
   recentErrors.set(key, now);
 
-  // периодическая чистка
   if (recentErrors.size > 500) {
     for (const [k, ts] of recentErrors) {
       if (now - ts > DEBOUNCE_MS) recentErrors.delete(k);
@@ -48,8 +50,10 @@ function shouldSkip(userId: number, source: string, message: string): boolean {
 }
 
 function formatMessage(payload: ErrorNotifyPayload): string {
+  const header =
+    payload.level === 'info' ? '✅ GateGram: статус' : '⚠️ GateGram: ошибка';
   const lines = [
-    '⚠️ GateGram: ошибка',
+    header,
     `Источник: ${sanitize(payload.source, 80)}`,
     `Сообщение: ${sanitize(payload.message, 500)}`,
   ];
@@ -82,38 +86,73 @@ async function resolveUserId(payload: ErrorNotifyPayload): Promise<number | null
   return null;
 }
 
+async function sendToUser(userId: number, payload: ErrorNotifyPayload): Promise<void> {
+  if (shouldSkip(userId, payload.source, payload.message)) return;
+
+  const settings = await prisma.userNotificationSettings.findUnique({
+    where: { userId },
+    include: {
+      notifyBot: { select: { id: true, token: true, ownerId: true } },
+      notifyTelegramUser: {
+        select: { id: true, telegramUserId: true, botId: true, status: true },
+      },
+    },
+  });
+
+  if (!settings?.errorNotificationsEnabled) return;
+  if (!settings.notifyBot || !settings.notifyTelegramUser) return;
+  if (settings.notifyBot.ownerId !== userId) return;
+  if (settings.notifyTelegramUser.botId !== settings.notifyBot.id) return;
+
+  const chatId = settings.notifyTelegramUser.telegramUserId.toString();
+  const text = formatMessage(payload);
+  const result = await sendTelegramMessage(settings.notifyBot.token, chatId, text);
+  if (!result.ok) {
+    console.error('notifyOwnerError: failed to send:', result.description);
+  }
+}
+
+/** Всем владельцам с включёнными уведомлениями (инфра / без userId). */
+export async function notifyAllEnabledOwners(payload: ErrorNotifyPayload): Promise<void> {
+  try {
+    const recipients = await prisma.userNotificationSettings.findMany({
+      where: {
+        errorNotificationsEnabled: true,
+        notifyBotId: { not: null },
+        notifyTelegramUserId: { not: null },
+      },
+      select: { userId: true },
+    });
+
+    for (const { userId } of recipients) {
+      try {
+        await sendToUser(userId, payload);
+      } catch (err) {
+        console.error(
+          'notifyAllEnabledOwners: send failed for user',
+          userId,
+          err instanceof Error ? err.message : err
+        );
+      }
+    }
+  } catch (err) {
+    console.error('notifyAllEnabledOwners failed:', err instanceof Error ? err.message : err);
+  }
+}
+
 /**
  * Отправляет уведомление владельцу (если включено в настройках).
+ * Без userId/botId — всем с включёнными уведомлениями.
  * Ошибки внутри notifier глотаются — без рекурсии.
  */
 export async function notifyOwnerError(payload: ErrorNotifyPayload): Promise<void> {
   try {
     const userId = await resolveUserId(payload);
-    if (!userId) return;
-
-    if (shouldSkip(userId, payload.source, payload.message)) return;
-
-    const settings = await prisma.userNotificationSettings.findUnique({
-      where: { userId },
-      include: {
-        notifyBot: { select: { id: true, token: true, ownerId: true } },
-        notifyTelegramUser: {
-          select: { id: true, telegramUserId: true, botId: true, status: true },
-        },
-      },
-    });
-
-    if (!settings?.errorNotificationsEnabled) return;
-    if (!settings.notifyBot || !settings.notifyTelegramUser) return;
-    if (settings.notifyBot.ownerId !== userId) return;
-    if (settings.notifyTelegramUser.botId !== settings.notifyBot.id) return;
-
-    const chatId = settings.notifyTelegramUser.telegramUserId.toString();
-    const text = formatMessage(payload);
-    const result = await sendTelegramMessage(settings.notifyBot.token, chatId, text);
-    if (!result.ok) {
-      console.error('notifyOwnerError: failed to send:', result.description);
+    if (!userId) {
+      await notifyAllEnabledOwners(payload);
+      return;
     }
+    await sendToUser(userId, payload);
   } catch (err) {
     console.error('notifyOwnerError failed:', err instanceof Error ? err.message : err);
   }

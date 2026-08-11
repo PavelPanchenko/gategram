@@ -152,6 +152,13 @@ export const config = {
 
   // Telegram
   telegramApiUrl: process.env.TELEGRAM_API_URL || 'https://api.telegram.org',
+
+  // Health watcher (frontend + API). URL по умолчанию — Docker-сеть.
+  healthCheckEnabled: process.env.HEALTH_CHECK_ENABLED !== 'false',
+  healthCheckIntervalMs: parseInt(process.env.HEALTH_CHECK_INTERVAL_MS || '60000', 10),
+  frontendHealthUrl:
+    process.env.FRONTEND_HEALTH_URL || 'http://frontend:3000/api/health',
+  apiHealthUrl: process.env.API_HEALTH_URL || 'http://127.0.0.1:8001/api/health',
 };
 
 // Валидация и проверка формата DATABASE_URL
