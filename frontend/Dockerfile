@@ -2,21 +2,22 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Copy package files
 COPY package.json package-lock.json* ./
-
-# Install dependencies
 RUN npm ci || npm install
 
-# Copy application code (включая frontend/.env.local)
 COPY . .
 
-# Next.js автоматически читает NEXT_PUBLIC_* из .env.local
-# Убедитесь, что frontend/.env.local существует и содержит NEXT_PUBLIC_API_URL
+# NEXT_PUBLIC_* встраиваются в клиентский бандл на этапе сборки
+ARG NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_API_URL_SSR
+ARG NEXT_PUBLIC_API_PORT=8001
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL_SSR=$NEXT_PUBLIC_API_URL_SSR
+ENV NEXT_PUBLIC_API_PORT=$NEXT_PUBLIC_API_PORT
+ENV NODE_ENV=production
 
-# Expose port
+RUN npm run build
+
 EXPOSE 3000
 
-# Run development server
-CMD ["npm", "run", "dev"]
-
+CMD ["npm", "start"]

@@ -107,33 +107,25 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      # Переменные читаются из frontend/.env.local, который копируется в контейнер
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://185.253.218.21:8001/api}
+        NEXT_PUBLIC_API_URL_SSR: ${NEXT_PUBLIC_API_URL_SSR:-backend-node}
+        NEXT_PUBLIC_API_PORT: ${NEXT_PUBLIC_API_PORT:-8001}
     container_name: gategram_frontend
     logging:
       driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
-    volumes:
-      - frontend_node_modules:/app/node_modules
-      - frontend_next_cache:/app/.next
     ports:
       - "3000:3000"
     depends_on:
       - backend-node
     environment:
       - NODE_ENV=production
-      # API URL для клиента (браузер) - внешний IP
-      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://185.253.218.21:8001/api}
-      # API URL для SSR (сервер) - внутренний Docker хост для скорости
-      - NEXT_PUBLIC_API_URL_SSR=${NEXT_PUBLIC_API_URL_SSR:-backend-node}
-      - NEXT_PUBLIC_API_PORT=${NEXT_PUBLIC_API_PORT:-8001}
-    command: sh -c "npm run build && npm start"
 
 volumes:
   postgres_data:
   redis_data:
   backend_media:
-  frontend_node_modules:
-  frontend_next_cache:
 

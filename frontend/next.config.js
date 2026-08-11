@@ -1,9 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // Уникальный buildId при каждой сборке — после деплоя браузер тянет новый JS, меньше шанс "Failed to find Server Action x"
-  generateBuildId: async () => process.env.BUILD_ID || `build-${Date.now()}`,
-  // Reduce risk of "Failed to find Server Action" after deploy: avoid long-lived cache of RSC
+  // Стабильный buildId из CI; без BUILD_ID — дефолт Next.js (хеш сборки)
+  ...(process.env.BUILD_ID ? { generateBuildId: async () => process.env.BUILD_ID } : {}),
+  // После деплоя не кешировать HTML/RSC — меньше шанс "Failed to find Server Action"
   async headers() {
     return [
       {
