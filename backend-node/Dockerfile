@@ -10,7 +10,7 @@ COPY package.json package-lock.json* ./
 COPY prisma ./prisma/
 
 # Устанавливаем зависимости
-RUN npm ci || npm install
+RUN npm ci
 
 # Генерируем Prisma Client
 RUN npx prisma generate

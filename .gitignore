@@ -31,8 +31,6 @@ Thumbs.db
 *.db
 *.sqlite
 
-# Docker
-.dockerignore
 
 # Media files
 media/

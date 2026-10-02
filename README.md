@@ -272,10 +272,11 @@ docker compose up -d
 ```
 
 Эта команда запустит:
-- PostgreSQL (порт 5432)
-- Redis (порт 6379)
-- Backend API (Node.js, порт 8001)
-- Frontend (порт 3000)
+- PostgreSQL (порт 5432, только localhost)
+- Redis (только внутри Docker-сети)
+- Backend API (Node.js, порт 8001, только localhost)
+- Frontend (порт 3000, только localhost)
+- Caddy — reverse proxy на портах 80/443: `/api/*` → backend, остальное → frontend
 
 5. **Примените схему БД (Prisma):**
 
@@ -293,8 +294,8 @@ docker compose ps
 
 7. **Откройте в браузере:**
 
-- **Frontend**: http://localhost:3000
-- **Backend API**: http://localhost:8001
+- **Приложение**: http://localhost (через Caddy)
+- **Backend API**: http://localhost/api
 
 8. **Создайте первого пользователя:**
 
@@ -540,8 +541,14 @@ LOG_LEVEL=WARNING
 ```
 
 2. **Используйте HTTPS:**
-   - Настройте SSL сертификаты (Let's Encrypt рекомендуется)
-   - Используйте nginx как reverse proxy
+   - В `docker-compose.yml` уже есть Caddy (`caddy/Caddyfile`). Укажите домен в корневом `.env`:
+     `SITE_ADDRESS=yourdomain.com` — Caddy сам выпустит сертификат Let's Encrypt
+     (A-запись домена → IP сервера, порты 80 и 443 открыты).
+   - Без `SITE_ADDRESS` сайт работает по HTTP на порту 80.
+   - Фронтенд обращается к API по относительному `/api` (тот же origin), поэтому в `CORS_ORIGINS`
+     должен быть адрес, по которому открывают сайт, например
+     `CORS_ORIGINS=https://yourdomain.com` или `CORS_ORIGINS=http://<IP сервера>`.
+   - Порты 3000 и 8001 опубликованы только на 127.0.0.1 — снаружи доступен только Caddy.
 
 3. **Настройте мониторинг:**
 
