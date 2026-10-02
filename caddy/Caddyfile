@@ -1,0 +1,20 @@
+# Единая точка входа: фронтенд и API на одном origin.
+# SITE_ADDRESS=example.com → Caddy сам выпустит HTTPS-сертификат (порты 80/443 должны быть открыты).
+# По умолчанию ":80" — HTTP по IP (сертификат на голый IP не выпускается).
+{$SITE_ADDRESS::80} {
+	encode gzip
+
+	# /api/health фронтенда используется только внутри Docker-сети, снаружи /api/* — это backend
+	handle /api/* {
+		reverse_proxy backend-node:8001
+	}
+
+	handle {
+		reverse_proxy frontend:3000
+	}
+
+	log {
+		output stdout
+		level ERROR
+	}
+}
