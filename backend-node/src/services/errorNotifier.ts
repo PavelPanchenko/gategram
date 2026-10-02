@@ -6,6 +6,7 @@
 
 import prisma from '../core/database';
 import { sendTelegramMessage } from '../utils/telegram';
+import { redactBotTokens } from '../utils/redact';
 
 const DEBOUNCE_MS = 5 * 60 * 1000; // 5 минут на одинаковую ошибку
 const recentErrors = new Map<string, number>();
@@ -22,8 +23,7 @@ export type ErrorNotifyPayload = {
 };
 
 function sanitize(text: string, maxLen: number): string {
-  const redacted = text
-    .replace(/\b\d{8,12}:[A-Za-z0-9_-]{30,}\b/g, '[REDACTED_TOKEN]')
+  const redacted = redactBotTokens(text)
     .replace(/(password|secret|token|authorization)\s*[:=]\s*\S+/gi, '$1=[REDACTED]');
   return redacted.length > maxLen ? `${redacted.slice(0, maxLen)}…` : redacted;
 }

@@ -140,6 +140,9 @@ app.listen(PORT, '0.0.0.0', async () => {
               data: { isActive: true },
             });
             console.log(`Bot ${bot.id} started successfully`);
+          } else if (botManager.isRetryScheduled(bot.id)) {
+            // Сетевая ошибка — бот остаётся активным, botManager повторит запуск в фоне
+            console.warn(`Bot ${bot.id} will be retried in background`);
           } else {
             // Если не удалось запустить, обновляем статус на неактивный
             await prisma.bot.update({
