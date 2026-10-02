@@ -5,6 +5,7 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: gategram_postgres
+    restart: unless-stopped
     env_file:
       - ./.env
     environment:
@@ -32,6 +33,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: gategram_redis
+    restart: unless-stopped
     # tcp-backlog 128 чтобы не было WARNING (somaxconn на хосте часто 128)
     # Порт наружу не публикуем — только Docker-сеть (backend ходит на redis:6379)
     command: redis-server --loglevel warning --tcp-backlog 128
@@ -53,6 +55,7 @@ services:
       context: ./backend-node
       dockerfile: Dockerfile
     container_name: gategram_backend_node
+    restart: unless-stopped
     logging:
       driver: json-file
       options:
@@ -87,6 +90,7 @@ services:
       context: ./backend-node
       dockerfile: Dockerfile
     container_name: gategram_backend_worker
+    restart: unless-stopped
     env_file:
       - ./.env
     environment:
@@ -116,6 +120,7 @@ services:
         NEXT_PUBLIC_API_URL_SSR: ${NEXT_PUBLIC_API_URL_SSR:-backend-node}
         NEXT_PUBLIC_API_PORT: ${NEXT_PUBLIC_API_PORT:-8001}
     container_name: gategram_frontend
+    restart: unless-stopped
     logging:
       driver: json-file
       options:
