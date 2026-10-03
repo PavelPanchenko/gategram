@@ -1,0 +1,14 @@
+# Скопируйте в scripts/backup.conf и поправьте под себя (backup.conf не попадает в git).
+
+# Куда складывать архивы на сервере и сколько последних хранить
+BACKUP_DIR=/root/backups/gategram
+BACKUP_KEEP=7
+
+# Шифрование архива паролем (gpg). Пароль храните ещё где-то вне сервера — без него архив не открыть.
+#   echo 'длинный-случайный-пароль' > /root/.gategram-backup-pass && chmod 600 /root/.gategram-backup-pass
+BACKUP_PASSPHRASE_FILE=/root/.gategram-backup-pass
+
+# Выгрузка в облако через rclone (имя remote из `rclone config`, затем папка). Пусто — не выгружать.
+RCLONE_REMOTE=
+# RCLONE_REMOTE=yandex:gategram-backups
+RCLONE_KEEP_DAYS=30

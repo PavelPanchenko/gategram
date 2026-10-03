@@ -24,3 +24,8 @@
   (сейчас `http://185.253.218.21`).
 - У всех сервисов `restart: unless-stopped` — после перезагрузки VPS всё поднимается само.
 - Обновление: `git pull && docker compose up -d --build`.
+
+## Бэкапы
+
+`scripts/backup.sh` (дамп БД + медиа + `.env`, ротация, gpg, rclone) и `scripts/restore.sh`. Настройки — `scripts/backup.conf`
+(не в git, пример в `scripts/backup.conf.example`). Подробности — README, раздел «Бэкапы».
