@@ -589,6 +589,52 @@ docker compose up -d --scale backend-node=1
 - Настройте firewall
 - Используйте Docker secrets для чувствительных данных
 
+## Бэкапы
+
+Скрипт `scripts/backup.sh` собирает в один архив дамп PostgreSQL, медиафайлы и `.env`, проверяет дамп,
+хранит последние `BACKUP_KEEP` архивов и (опционально) шифрует их паролем и выгружает в облако через rclone.
+Скрипт работает только с контейнерами этого проекта.
+
+### Настройка на сервере
+
+```bash
+cd /путь/к/gategram
+cp scripts/backup.conf.example scripts/backup.conf   # поправить пути
+echo 'длинный-случайный-пароль' > /root/.gategram-backup-pass && chmod 600 /root/.gategram-backup-pass
+scripts/backup.sh                                     # первый запуск вручную
+```
+
+Пароль сохраните ещё где-нибудь вне сервера (менеджер паролей): без него зашифрованный архив не открыть.
+
+**Выгрузка в облако** (чтобы копия осталась, даже если доступ к VPS пропадёт):
+
+```bash
+curl https://rclone.org/install.sh | bash
+rclone config          # создать remote, например "yandex" (Яндекс Диск) или "gdrive" (Google Drive)
+```
+
+Затем в `scripts/backup.conf`: `RCLONE_REMOTE=yandex:gategram-backups`.
+
+**Каждую ночь в 03:17** (`crontab -e`):
+
+```
+17 3 * * * /путь/к/gategram/scripts/backup.sh >> /var/log/gategram-backup.log 2>&1
+```
+
+### Восстановление / переезд на новый сервер
+
+```bash
+git clone https://github.com/PavelPanchenko/gategram.git && cd gategram
+BACKUP_PASSPHRASE_FILE=/путь/к/файлу_с_паролем scripts/restore.sh /путь/к/gategram_ДАТА.tar.gz.gpg
+```
+
+`restore.sh` останавливает приложение, восстанавливает базу и медиа, берёт `.env` из архива (если в папке его ещё нет)
+и запускает всё заново. При смене IP или домена поправьте `CORS_ORIGINS` / `SITE_ADDRESS` в `.env`.
+
+Чтобы при переезде не потерять данные: на старом сервере `docker compose stop backend-node backend-worker frontend`,
+затем `scripts/backup.sh` — этот архив и переносите. Боты не должны работать на двух серверах одновременно
+(Telegram отвечает `409 Conflict`).
+
 ## Безопасность
 
 ### Реализованные меры

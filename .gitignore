@@ -36,3 +36,6 @@ Thumbs.db
 media/
 
 ## Legacy - removed
+
+# Настройки бэкапа (пути, облако)
+scripts/backup.conf
