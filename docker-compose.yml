@@ -141,9 +141,17 @@ services:
     environment:
       # Домен для автоматического HTTPS, например SITE_ADDRESS=gategram.example.com
       - SITE_ADDRESS=${SITE_ADDRESS:-:80}
+      # Адрес telegram-broadcast (отдельный проект на этом же сервере), см. caddy/Caddyfile
+      - BROADCAST_ADDRESS=${BROADCAST_ADDRESS:-:5001}
     ports:
       - "80:80"
       - "443:443"
+      # telegram-broadcast по IP: http://IP:5001 (сам контейнер порт не публикует)
+      - "5001:5001"
+    networks:
+      - default
+      # Общая сеть с telegram-broadcast — через неё Caddy достаёт контейнер telegram-broadcast:5001
+      - edge
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
@@ -164,3 +172,7 @@ volumes:
   caddy_data:
   caddy_config:
 
+networks:
+  # Общая сеть для проектов на сервере. Создаётся здесь; telegram-broadcast подключается к ней как external.
+  edge:
+    name: vps-edge

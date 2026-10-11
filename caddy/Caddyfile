@@ -1,6 +1,11 @@
-# Единая точка входа: фронтенд и API на одном origin.
-# SITE_ADDRESS=example.com → Caddy сам выпустит HTTPS-сертификат (порты 80/443 должны быть открыты).
-# По умолчанию ":80" — HTTP по IP (сертификат на голый IP не выпускается).
+# Единая точка входа для всех проектов на сервере.
+#
+# Адреса задаются в корневом .env:
+#   SITE_ADDRESS       — GateGram.          По умолчанию ":80"   → http://IP/
+#   BROADCAST_ADDRESS  — telegram-broadcast. По умолчанию ":5001" → http://IP:5001/
+# Если указать имя хоста (домен), Caddy сам выпустит HTTPS-сертификат Let's Encrypt.
+
+# GateGram: фронтенд и API на одном origin
 {$SITE_ADDRESS::80} {
 	encode gzip
 
@@ -12,6 +17,18 @@
 	handle {
 		reverse_proxy frontend:3000
 	}
+
+	log {
+		output stdout
+		level ERROR
+	}
+}
+
+# telegram-broadcast (отдельный проект, docker-compose в его репозитории).
+# Контейнер подключён к общей сети vps-edge и сам наружу порт не публикует.
+{$BROADCAST_ADDRESS::5001} {
+	encode gzip
+	reverse_proxy telegram-broadcast:5001
 
 	log {
 		output stdout
