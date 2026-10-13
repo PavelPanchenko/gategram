@@ -38,6 +38,8 @@ Ubuntu 24.04, 2 vCPU / 2 ГБ RAM + 2 ГБ swap, вход только по SSH-
 `scripts/backup.sh` (дамп БД + медиа + `.env`, ротация, gpg, rclone) и `scripts/restore.sh`. Настройки — `scripts/backup.conf`
 (не в git, пример в `scripts/backup.conf.example`). Подробности — README, раздел «Бэкапы».
 
-На сервере: архивы шифруются паролем из `/root/.gategram-backup-pass` и выгружаются в Яндекс Диск
-(rclone remote `gategram:`, папки `gategram-backups` и `telegram-broadcast-backups`). Cron (UTC):
+На сервере: архивы шифруются паролем из `/root/.gategram-backup-pass` и выгружаются в Dropbox — в общую папку,
+к которой дали доступ (rclone remote `dropbox:`, путь `Гетаграм+Бродкаст/gategram-backups` и
+`Гетаграм+Бродкаст/telegram-broadcast-backups`; в `backup.conf` путь в кавычках). Яндекс Диск больше не используется
+(remote удалён, старые архивы там недоступны). Cron (UTC):
 03:17 — GateGram, 03:27 — telegram-broadcast; логи в `/var/log/gategram-backup.log` и `/var/log/telegram-broadcast-backup.log`.
