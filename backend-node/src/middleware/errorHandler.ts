@@ -1,6 +1,17 @@
 import { Request, Response, NextFunction } from 'express';
 import { notifyOwnerError } from '../services/errorNotifier';
 
+/**
+ * Запрос с чужого Origin, отклонённый CORS. Это не сбой сервера: так выглядят
+ * сканеры и чужие сайты, поэтому отвечаем 403 и не шлём уведомление владельцу.
+ */
+export class CorsRejectedError extends Error {
+  constructor(public readonly origin: string) {
+    super('Not allowed by CORS');
+    this.name = 'CorsRejectedError';
+  }
+}
+
 function extractBotId(req: Request): number | undefined {
   const raw =
     (req.params as { botId?: string }).botId ||
@@ -16,6 +27,14 @@ export function errorHandler(
   res: Response,
   next: NextFunction
 ): void {
+  if (err instanceof CorsRejectedError) {
+    console.warn(`CORS: blocked ${req.method} ${req.originalUrl || req.url} from origin ${err.origin}`);
+    if (!res.headersSent) {
+      res.status(403).json({ detail: 'Not allowed by CORS' });
+    }
+    return;
+  }
+
   console.error('Error:', err);
 
   if (!res.headersSent) {

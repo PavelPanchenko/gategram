@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import 'express-async-errors';
 import { config } from './core/config';
-import { errorHandler } from './middleware/errorHandler';
+import { errorHandler, CorsRejectedError } from './middleware/errorHandler';
 import prisma from './core/database';
 import { botManager } from './services/botManager';
 import { scheduledBroadcastQueue } from './queues/broadcastQueue';
@@ -41,7 +41,7 @@ app.use(cors({
         console.log(`⚠️  CORS: Blocked origin: ${origin}`);
         console.log(`   Allowed origins: ${config.corsOrigins.join(', ')}`);
       }
-      callback(new Error('Not allowed by CORS'));
+      callback(new CorsRejectedError(origin));
     }
   },
   credentials: true,
