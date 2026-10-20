@@ -39,7 +39,8 @@ Ubuntu 24.04, 2 vCPU / 2 ГБ RAM + 2 ГБ swap, вход только по SSH-
 (не в git, пример в `scripts/backup.conf.example`). Подробности — README, раздел «Бэкапы».
 
 На сервере: архивы шифруются паролем из `/root/.gategram-backup-pass` и выгружаются в Dropbox — в общую папку,
-к которой дали доступ (rclone remote `dropbox:`, путь `Гетаграм+Бродкаст/gategram-backups` и
-`Гетаграм+Бродкаст/telegram-broadcast-backups`; в `backup.conf` путь в кавычках). Яндекс Диск больше не используется
+в которую пригласили (rclone remote `dropbox:`, путь `Getagram.Brodcast/gategram-backups` и
+`Getagram.Brodcast/telegram-broadcast-backups`; в `backup.conf` путь в кавычках). Папка должна быть именно
+добавлена по приглашению: по ссылке писать в неё нельзя, rclone тогда создаёт одноимённую папку в своём аккаунте. Яндекс Диск больше не используется
 (remote удалён, старые архивы там недоступны). Cron (UTC):
 03:17 — GateGram, 03:27 — telegram-broadcast; логи в `/var/log/gategram-backup.log` и `/var/log/telegram-broadcast-backup.log`.
